@@ -11,7 +11,8 @@ use futures::{Stream, StreamExt};
 use tonic::{transport::Server, Request, Response, Status};
 
 use plugin::grpc_broker_server::{GrpcBroker, GrpcBrokerServer};
-use plugin::{ConnInfo};
+use plugin::grpc_controller_server::{GrpcController, GrpcControllerServer};
+use plugin::{ConnInfo, Empty};
 
 pub mod plugin {
     tonic::include_proto!("plugin");
@@ -41,7 +42,19 @@ impl GrpcBroker for MyGrpcBroker {
 
         Ok(Response::new(Box::pin(output) as Self::StartStreamStream))
     }
+}
 
+#[derive(Debug, Default)]
+pub struct MyGrpcController {}
+
+#[tonic::async_trait]
+impl GrpcController for MyGrpcController {
+    async fn shutdown(
+        &self,
+        _request: tonic::Request<Empty>,
+    ) -> Result<tonic::Response<Empty>, tonic::Status> {
+        Ok(Response::new(Empty{}))
+    }
 }
 
 
@@ -49,9 +62,11 @@ impl GrpcBroker for MyGrpcBroker {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
     let grpc_broker = MyGrpcBroker::default();
+    let grpc_controller = MyGrpcController::default();
 
     Server::builder()
         .add_service(GrpcBrokerServer::new(grpc_broker))
+        .add_service(GrpcControllerServer::new(grpc_controller))
         .serve(addr)
         .await?;
 
