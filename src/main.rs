@@ -6,13 +6,13 @@
 use std::pin::Pin;
 
 use futures::{Stream, StreamExt};
-//use tokio::sync::mpsc;
-//use tokio_stream::wrappers::ReceiverStream;
+use tokio::sync::broadcast;
 use tonic::{transport::Server, Request, Response, Status};
 
 use plugin::grpc_broker_server::{GrpcBroker, GrpcBrokerServer};
 use plugin::grpc_controller_server::{GrpcController, GrpcControllerServer};
-use plugin::{ConnInfo, Empty};
+use plugin::grpc_stdio_server::{GrpcStdio, GrpcStdioServer};
+use plugin::{ConnInfo, Empty, StdioData};
 
 pub mod plugin {
     tonic::include_proto!("plugin");
@@ -57,16 +57,43 @@ impl GrpcController for MyGrpcController {
     }
 }
 
+#[derive(Debug)]
+pub struct MyGrpcStdio {
+    pub tx: broadcast::Sender<StdioData>,
+}
+
+#[tonic::async_trait]
+impl GrpcStdio for MyGrpcStdio {
+    type StreamStdioStream = Pin<Box<dyn Stream<Item = Result<StdioData, Status>> + Send + 'static>>;
+    async fn stream_stdio(
+        &self,
+        _request: tonic::Request<()>,
+    ) -> Result<tonic::Response<Self::StreamStdioStream>, tonic::Status> {
+        let mut rx = self.tx.subscribe();
+
+        let output = async_stream::try_stream! {
+            while let Ok(iodata) = rx.recv().await {
+                yield iodata.clone();
+            }
+        };
+
+        Ok(Response::new(Box::pin(output) as Self::StreamStdioStream))
+    }
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
     let grpc_broker = MyGrpcBroker::default();
     let grpc_controller = MyGrpcController::default();
+    let (tx, _) = broadcast::channel(10);
+    let grpc_stdio = MyGrpcStdio{tx};
 
     Server::builder()
         .add_service(GrpcBrokerServer::new(grpc_broker))
         .add_service(GrpcControllerServer::new(grpc_controller))
+        .add_service(GrpcStdioServer::new(grpc_stdio))
         .serve(addr)
         .await?;
 
