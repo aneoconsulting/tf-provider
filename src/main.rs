@@ -10,6 +10,8 @@ use provider::CmdProvider;
 
 use std::{env, fs::File, io::SeekFrom, sync::Mutex};
 
+use time::ext::NumericalDuration;
+
 use anyhow::{anyhow, Result};
 use futures::{try_join, TryFutureExt};
 use rcgen::{BasicConstraints, IsCa};
@@ -21,6 +23,9 @@ use tonic::transport::{server::ServerTlsConfig, Server};
 use tower_http::trace::TraceLayer;
 
 use rustls::internal::msgs::handshake::DigitallySignedStruct;
+
+mod plugin;
+mod provider;
 
 const CORE_PROTOCOL_VERSION: u8 = 1;
 
@@ -71,19 +76,14 @@ impl rustls::ClientCertVerifier for CertVerifier {
     }
 }
 
-mod plugin;
-mod provider;
+//fn tls_config() -> Result<ServerTlsConfig, Box<dyn std::error::Error>> {
+//}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let log_file = File::create("cmd-trace.log")?;
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .with_ansi(false)
-        .with_writer(Mutex::new(log_file))
-        .init();
 
-    let addr = "0.0.0.0:10000".parse()?;
+    let addr = "127.0.0.1:10000".parse()?;
     let (tx, _) = broadcast::channel(10);
     let grpc_io = GrpcIo { tx: tx.clone() };
 
@@ -102,14 +102,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_pem_file(&mut pem_buffer)
         .unwrap();
     let mut cp = rcgen::CertificateParams::new(vec!["localhost".to_string()]);
+    cp.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
+    cp.not_before = time::OffsetDateTime::now_utc().saturating_sub(30.seconds());
+    cp.not_after = time::OffsetDateTime::now_utc().saturating_add((30 * 365).days());
+    let mut dn = rcgen::DistinguishedName::new();
+    dn.push(rcgen::DnType::OrganizationName, "Hashicorp");
+    dn.push(
+        rcgen::DnType::CommonName,
+        rcgen::DnValue::PrintableString("localhost".to_string()),
+    );
+    cp.distinguished_name = dn;
     cp.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    cp.key_usages = vec![
+        rcgen::KeyUsagePurpose::DigitalSignature,
+        rcgen::KeyUsagePurpose::KeyEncipherment,
+        rcgen::KeyUsagePurpose::KeyAgreement,
+        rcgen::KeyUsagePurpose::KeyCertSign,
+    ];
+    cp.extended_key_usages = vec![
+        rcgen::ExtendedKeyUsagePurpose::ClientAuth,
+        rcgen::ExtendedKeyUsagePurpose::ServerAuth,
+    ];
+    cp.key_identifier_method = rcgen::KeyIdMethod::Sha512;
     let server_cert = rcgen::Certificate::from_params(cp)?;
-
-    let mut cert_buffer = std::io::Cursor::new(server_cert.serialize_pem()?);
-    let tls_cert = pemfile::certs(&mut cert_buffer).unwrap();
 
     let mut key_buffer = std::io::Cursor::new(server_cert.serialize_private_key_pem());
     let mut key = pemfile::pkcs8_private_keys(&mut key_buffer).unwrap();
+
+    let server_cert_der = server_cert.serialize_der_with_signer(&server_cert)?;
+    let p = pem::Pem {
+        tag: "CERTIFICATE".to_string(),
+        contents: server_cert_der.clone(),
+    };
+    let server_cert_pem = pem::encode(&p);
+
+    let mut cert_buffer = std::io::Cursor::new(server_cert_pem);
+    let tls_cert = pemfile::certs(&mut cert_buffer).unwrap();
 
     cert_buffer.seek(SeekFrom::Start(0)).await?;
 
@@ -127,6 +155,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tls_config = ServerTlsConfig::new();
     tls_config.rustls_server_config(server_config);
 
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .with_ansi(false)
+        .with_writer(Mutex::new(log_file))
+        .init();
+
     let serve = Server::builder()
         .tls_config(tls_config)?
         .layer(TraceLayer::new_for_grpc())
@@ -136,16 +170,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(ProviderServer::new(provider))
         .serve(addr);
 
-    async fn info(server_cert: rcgen::Certificate) -> Result<()> {
+    async fn info(der: &[u8]) -> Result<()> {
         println!(
             "{}|6|tcp|localhost:10000|grpc|{}",
             CORE_PROTOCOL_VERSION,
-            base64::encode_config(server_cert.serialize_der()?, base64::STANDARD_NO_PAD)
+            base64::encode_config(der, base64::STANDARD_NO_PAD)
         );
         Ok(())
     }
 
-    try_join!(serve.map_err(|e| anyhow!(e)), info(server_cert))?;
+    try_join!(
+        serve.map_err(|e| anyhow!(e)),
+        info(server_cert_der.as_slice())
+    )?;
 
     Ok(())
 }
