@@ -1,7 +1,10 @@
 use tokio::sync::broadcast;
 
-use plugin::{grpc_broker_server::GrpcBrokerServer, grpc_controller_server::GrpcControllerServer, grpc_stdio_server::GrpcStdioServer};
-use plugin::{GrpcIo, GrpcStdio, GrpcController, GrpcBroker};
+use plugin::{
+    grpc_broker_server::GrpcBrokerServer, grpc_controller_server::GrpcControllerServer,
+    grpc_stdio_server::GrpcStdioServer,
+};
+use plugin::{GrpcBroker, GrpcController, GrpcIo, GrpcStdio};
 use provider::tf::provider_server::ProviderServer;
 use provider::CmdProvider;
 
@@ -14,7 +17,7 @@ use rustls::{
     internal::pemfile, ClientCertVerified, HandshakeSignatureValid, ProtocolVersion, TLSError,
 };
 use tokio::io::AsyncSeekExt;
-use tonic::transport::{Server, server::ServerTlsConfig};
+use tonic::transport::{server::ServerTlsConfig, Server};
 use tower_http::trace::TraceLayer;
 
 use rustls::internal::msgs::handshake::DigitallySignedStruct;
@@ -82,12 +85,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let addr = "0.0.0.0:10000".parse()?;
     let (tx, _) = broadcast::channel(10);
-    let grpc_io = GrpcIo{tx: tx.clone()};
+    let grpc_io = GrpcIo { tx: tx.clone() };
 
-    let grpc_broker = GrpcBroker{io: grpc_io.clone()};
-    let grpc_controller = GrpcController{io:grpc_io};
-    let grpc_stdio = GrpcStdio{tx: tx};
-    let provider = CmdProvider{};
+    let grpc_broker = GrpcBroker {
+        io: grpc_io.clone(),
+    };
+    let grpc_controller = GrpcController { io: grpc_io };
+    let grpc_stdio = GrpcStdio { tx: tx };
+    let provider = CmdProvider {};
 
     let mut client_root_cert_store = rustls::RootCertStore::empty();
 
@@ -131,16 +136,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(ProviderServer::new(provider))
         .serve(addr);
 
-
     async fn info(server_cert: rcgen::Certificate) -> Result<()> {
         println!(
             "{}|6|tcp|localhost:10000|grpc|{}",
             CORE_PROTOCOL_VERSION,
-            base64::encode_config(
-                server_cert.serialize_der()?,
-                base64::STANDARD_NO_PAD
-                )
-            );
+            base64::encode_config(server_cert.serialize_der()?, base64::STANDARD_NO_PAD)
+        );
         Ok(())
     }
 

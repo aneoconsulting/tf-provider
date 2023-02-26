@@ -2,9 +2,8 @@
 
 //use std::sync::OnceLock;
 
-
-use std::pin::Pin;
 use std::fmt::Write;
+use std::pin::Pin;
 
 use futures::{Stream, StreamExt};
 use tokio::sync::broadcast;
@@ -41,7 +40,11 @@ impl grpc_broker_server::GrpcBroker for GrpcBroker {
 
 impl core::fmt::Display for ConnInfo {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "ConnInfo{{service_id: {}, network: {}, address: {} }}", self.service_id, self.network, self.address)
+        write!(
+            f,
+            "ConnInfo{{service_id: {}, network: {}, address: {} }}",
+            self.service_id, self.network, self.address
+        )
     }
 }
 
@@ -58,7 +61,7 @@ impl grpc_controller_server::GrpcController for GrpcController {
     ) -> Result<tonic::Response<Empty>, tonic::Status> {
         write!(self.io.stderr(), "shutdown requested\n").unwrap();
 
-        Ok(Response::new(Empty{}))
+        Ok(Response::new(Empty {}))
     }
 }
 
@@ -69,7 +72,8 @@ pub struct GrpcStdio {
 
 #[tonic::async_trait]
 impl grpc_stdio_server::GrpcStdio for GrpcStdio {
-    type StreamStdioStream = Pin<Box<dyn Stream<Item = Result<StdioData, Status>> + Send + 'static>>;
+    type StreamStdioStream =
+        Pin<Box<dyn Stream<Item = Result<StdioData, Status>> + Send + 'static>>;
     async fn stream_stdio(
         &self,
         _request: tonic::Request<()>,
@@ -93,7 +97,7 @@ impl grpc_stdio_server::GrpcStdio for GrpcStdio {
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct GrpcIoStream<'a> {
     pub tx: &'a broadcast::Sender<StdioData>,
     pub channel: i32,
@@ -101,24 +105,32 @@ pub struct GrpcIoStream<'a> {
 
 impl std::fmt::Write for GrpcIoStream<'_> {
     fn write_str(&mut self, s: &str) -> Result<(), std::fmt::Error> {
-        match self.tx.send(StdioData{channel: self.channel, data: s.as_bytes().to_vec()}) {
+        match self.tx.send(StdioData {
+            channel: self.channel,
+            data: s.as_bytes().to_vec(),
+        }) {
             Ok(_) => Ok(()),
             Err(_) => Ok(()),
         }
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct GrpcIo {
     pub tx: broadcast::Sender<StdioData>,
 }
 
 impl GrpcIo {
     fn stdout(&self) -> GrpcIoStream {
-        GrpcIoStream{tx: &self.tx, channel: 1}
+        GrpcIoStream {
+            tx: &self.tx,
+            channel: 1,
+        }
     }
     fn stderr(&self) -> GrpcIoStream {
-        GrpcIoStream{tx: &self.tx, channel: 2}
+        GrpcIoStream {
+            tx: &self.tx,
+            channel: 2,
+        }
     }
 }
-
