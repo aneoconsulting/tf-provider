@@ -959,8 +959,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "terraform-cmd-provider"
-version = "0.0.1"
+name = "terraform-provider-cmd"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stream",
