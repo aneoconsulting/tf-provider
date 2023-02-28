@@ -7,6 +7,7 @@ use std::pin::Pin;
 
 use futures::{Stream, StreamExt};
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 
 tonic::include_proto!("plugin");
@@ -14,6 +15,7 @@ tonic::include_proto!("plugin");
 #[derive(Debug)]
 pub struct GrpcBroker {
     pub io: GrpcIo,
+    pub cancellation_token: CancellationToken,
 }
 
 #[tonic::async_trait]
@@ -24,13 +26,23 @@ impl grpc_broker_server::GrpcBroker for GrpcBroker {
         request: Request<tonic::Streaming<ConnInfo>>,
     ) -> Result<Response<Self::StartStreamStream>, Status> {
         let mut stream = request.into_inner();
+        let token = self.cancellation_token.clone();
 
         let io = self.io.clone();
         let output = async_stream::try_stream! {
-            while let Some(conn_info) = stream.next().await {
-                let conn_info = conn_info?;
-                write!(io.stdout(), "relay {}\n", conn_info).unwrap();
-                yield conn_info.clone();
+            loop {
+                tokio::select!{
+                    Some(conn_info) = stream.next() => match conn_info {
+                        Ok(conn_info) => {
+                            write!(io.stdout(), "relay {}\n", conn_info).unwrap_or(());
+                            yield conn_info.clone();
+                        },
+                        Err(status) => {
+                            write!(io.stderr(), "stream error {}\n", status).unwrap_or(());
+                        },
+                    },
+                    _ = token.cancelled() => break,
+                };
             }
         };
 
@@ -51,6 +63,7 @@ impl core::fmt::Display for ConnInfo {
 #[derive(Debug)]
 pub struct GrpcController {
     pub io: GrpcIo,
+    pub cancellation_token: CancellationToken,
 }
 
 #[tonic::async_trait]
@@ -59,7 +72,7 @@ impl grpc_controller_server::GrpcController for GrpcController {
         &self,
         _request: tonic::Request<Empty>,
     ) -> Result<tonic::Response<Empty>, tonic::Status> {
-        write!(self.io.stderr(), "shutdown requested\n").unwrap();
+        self.cancellation_token.cancel();
 
         Ok(Response::new(Empty {}))
     }
@@ -68,6 +81,7 @@ impl grpc_controller_server::GrpcController for GrpcController {
 #[derive(Debug)]
 pub struct GrpcStdio {
     pub tx: broadcast::Sender<StdioData>,
+    pub cancellation_token: CancellationToken,
 }
 
 #[tonic::async_trait]
@@ -79,17 +93,21 @@ impl grpc_stdio_server::GrpcStdio for GrpcStdio {
         _request: tonic::Request<()>,
     ) -> Result<tonic::Response<Self::StreamStdioStream>, tonic::Status> {
         let mut rx = self.tx.subscribe();
+        let token = self.cancellation_token.clone();
 
         let output = async_stream::try_stream! {
             loop {
-                let iodata = rx.recv().await;
-                if let Ok(iodata) = iodata {
-                    yield iodata.clone();
-                } else if let Err(broadcast::error::RecvError::Lagged(n)) = iodata {
-                    eprintln!("IO over grpc lags behind by {n} messages!");
-                } else {
-                    break;
-                }
+                tokio::select! {
+                    iodata = rx.recv() =>
+                        if let Ok(iodata) = iodata {
+                            yield iodata.clone();
+                        } else if let Err(broadcast::error::RecvError::Lagged(n)) = iodata {
+                            eprintln!("IO over grpc lags behind by {n} messages!");
+                        } else {
+                            break;
+                        },
+                    _ = token.cancelled() => break,
+                };
             }
         };
 

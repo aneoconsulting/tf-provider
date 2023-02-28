@@ -1,5 +1,3 @@
-use tokio::sync::broadcast;
-
 use plugin::{
     grpc_broker_server::GrpcBrokerServer, grpc_controller_server::GrpcControllerServer,
     grpc_stdio_server::GrpcStdioServer,
@@ -25,6 +23,8 @@ use rustls::{
     internal::pemfile, ClientCertVerified, HandshakeSignatureValid, ProtocolVersion, TLSError,
 };
 use tokio::io::AsyncSeekExt;
+use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 use tonic::transport::{server::ServerTlsConfig, Server};
 use tower_http::trace::TraceLayer;
 
@@ -240,6 +240,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let log_file = File::create("cmd-trace.log")?;
 
     let server_config = ServerConfig::new().await?;
+    let cancellation_token = CancellationToken::new();
 
     let ip = "127.0.0.1".parse()?;
     let (tx, _) = broadcast::channel(10);
@@ -247,9 +248,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let grpc_broker = GrpcBroker {
         io: grpc_io.clone(),
+        cancellation_token: cancellation_token.clone(),
     };
-    let grpc_controller = GrpcController { io: grpc_io };
-    let grpc_stdio = GrpcStdio { tx: tx };
+    let grpc_controller = GrpcController {
+        io: grpc_io,
+        cancellation_token: cancellation_token.clone(),
+    };
+    let grpc_stdio = GrpcStdio {
+        tx: tx,
+        cancellation_token: cancellation_token.clone(),
+    };
     let provider = CmdProvider {};
 
     tracing_subscriber::fmt()
@@ -269,7 +277,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(GrpcControllerServer::new(grpc_controller))
         .add_service(GrpcStdioServer::new(grpc_stdio))
         .add_service(ProviderServer::new(provider))
-        .serve_with_incoming(listener_stream);
+        .serve_with_incoming_shutdown(listener_stream, cancellation_token.cancelled());
 
     async fn info(endpoint: &str, der: &[u8]) -> Result<()> {
         println!(
@@ -283,7 +291,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     try_join!(
         serve.map_err(|e| anyhow!(e)),
-        info(&endpoint, server_config.cert.as_slice())
+        info(&endpoint, server_config.cert.as_slice()),
     )?;
 
     Ok(())

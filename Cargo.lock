@@ -979,6 +979,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-stream",
+ "tokio-util 0.7.4",
  "tonic",
  "tonic-build",
  "tower-http",
