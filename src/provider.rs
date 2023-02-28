@@ -21,11 +21,40 @@ impl tf::provider_server::Provider for CmdProvider {
                     attributes: vec![],
                     block_types: vec![],
                     description: "cmd".to_string(),
-                    description_kind: tf::StringKind::Plain as i32,
+                    description_kind: tf::StringKind::Plain.into(),
                     deprecated: false,
                 }),
             }),
-            resource_schemas: HashMap::new(),
+            resource_schemas: [(
+                "cmd_test".to_string(),
+                tf::Schema {
+                    version: 1,
+                    block: Some(tf::schema::Block {
+                        version: 1,
+                        attributes: vec![],
+                        block_types: vec![tf::schema::NestedBlock {
+                            type_name: "read".to_string(),
+                            block: Some(tf::schema::Block {
+                                version: 1,
+                                attributes: vec![],
+                                block_types: vec![],
+                                description: "cmd".to_string(),
+                                description_kind: tf::StringKind::Plain.into(),
+                                deprecated: false,
+                            }),
+                            nesting: tf::schema::nested_block::NestingMode::Map.into(),
+                            min_items: 0,
+                            max_items: 0,
+                        }],
+                        description: "cmd_test".to_string(),
+                        description_kind: tf::StringKind::Plain.into(),
+                        deprecated: false,
+                    }),
+                },
+            )]
+            .iter()
+            .cloned()
+            .collect(),
             data_source_schemas: HashMap::new(),
             diagnostics: vec![],
             provider_meta: Some(tf::Schema {
@@ -35,7 +64,7 @@ impl tf::provider_server::Provider for CmdProvider {
                     attributes: vec![],
                     block_types: vec![],
                     description: "cmd".to_string(),
-                    description_kind: tf::StringKind::Plain as i32,
+                    description_kind: tf::StringKind::Plain.into(),
                     deprecated: false,
                 }),
             }),
@@ -98,9 +127,15 @@ impl tf::provider_server::Provider for CmdProvider {
     }
     async fn plan_resource_change(
         &self,
-        _request: tonic::Request<tf::plan_resource_change::Request>,
+        request: tonic::Request<tf::plan_resource_change::Request>,
     ) -> Result<tonic::Response<tf::plan_resource_change::Response>, tonic::Status> {
-        unimplemented!();
+        Ok(tonic::Response::new(tf::plan_resource_change::Response {
+            planned_state: request.get_ref().proposed_new_state.clone(),
+            requires_replace: vec![],
+            planned_private: vec![],
+            diagnostics: vec![],
+            legacy_type_system: false,
+        }))
     }
     async fn apply_resource_change(
         &self,

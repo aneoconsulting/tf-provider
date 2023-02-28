@@ -8,9 +8,9 @@ terraform {
 }
 
 provider "cmd" {
-    foo = "bar"
 }
 
-resource "cmd_thing" "test" {
-    bar = "baz"
+resource "cmd_test" "test" {
+  read "pouet" {
+  }
 }
