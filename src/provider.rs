@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 pub mod tf {
     tonic::include_proto!("tfplugin6");
 }
@@ -11,25 +13,66 @@ impl tf::provider_server::Provider for CmdProvider {
         &self,
         _request: tonic::Request<tf::get_provider_schema::Request>,
     ) -> Result<tonic::Response<tf::get_provider_schema::Response>, tonic::Status> {
-        unimplemented!();
+        Ok(tonic::Response::new(tf::get_provider_schema::Response {
+            provider: Some(tf::Schema {
+                version: 1,
+                block: Some(tf::schema::Block {
+                    version: 1,
+                    attributes: vec![],
+                    block_types: vec![],
+                    description: "cmd".to_string(),
+                    description_kind: tf::StringKind::Plain as i32,
+                    deprecated: false,
+                }),
+            }),
+            resource_schemas: HashMap::new(),
+            data_source_schemas: HashMap::new(),
+            diagnostics: vec![],
+            provider_meta: Some(tf::Schema {
+                version: 1,
+                block: Some(tf::schema::Block {
+                    version: 1,
+                    attributes: vec![],
+                    block_types: vec![],
+                    description: "cmd".to_string(),
+                    description_kind: tf::StringKind::Plain as i32,
+                    deprecated: false,
+                }),
+            }),
+            server_capabilities: Some(tf::get_provider_schema::ServerCapabilities {
+                plan_destroy: false,
+            }),
+        }))
     }
     async fn validate_provider_config(
         &self,
         _request: tonic::Request<tf::validate_provider_config::Request>,
     ) -> Result<tonic::Response<tf::validate_provider_config::Response>, tonic::Status> {
-        unimplemented!();
+        Ok(tonic::Response::new(
+            tf::validate_provider_config::Response {
+                diagnostics: vec![],
+            },
+        ))
     }
     async fn validate_resource_config(
         &self,
         _request: tonic::Request<tf::validate_resource_config::Request>,
     ) -> Result<tonic::Response<tf::validate_resource_config::Response>, tonic::Status> {
-        unimplemented!();
+        Ok(tonic::Response::new(
+            tf::validate_resource_config::Response {
+                diagnostics: vec![],
+            },
+        ))
     }
     async fn validate_data_resource_config(
         &self,
         _request: tonic::Request<tf::validate_data_resource_config::Request>,
     ) -> Result<tonic::Response<tf::validate_data_resource_config::Response>, tonic::Status> {
-        unimplemented!();
+        Ok(tonic::Response::new(
+            tf::validate_data_resource_config::Response {
+                diagnostics: vec![],
+            },
+        ))
     }
     async fn upgrade_resource_state(
         &self,
@@ -42,7 +85,9 @@ impl tf::provider_server::Provider for CmdProvider {
         &self,
         _request: tonic::Request<tf::configure_provider::Request>,
     ) -> Result<tonic::Response<tf::configure_provider::Response>, tonic::Status> {
-        unimplemented!();
+        Ok(tonic::Response::new(tf::configure_provider::Response {
+            diagnostics: vec![],
+        }))
     }
     /// ////// Managed Resource Lifecycle
     async fn read_resource(
