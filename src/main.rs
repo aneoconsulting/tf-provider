@@ -32,6 +32,7 @@ use rustls::internal::msgs::handshake::DigitallySignedStruct;
 
 mod plugin;
 mod provider;
+mod value;
 
 const CORE_PROTOCOL_VERSION: u8 = 1;
 

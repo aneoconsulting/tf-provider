@@ -1,7 +1,26 @@
+use crate::value::Value;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
+
+use self::tf::DynamicValue;
 
 pub mod tf {
     tonic::include_proto!("tfplugin6");
+}
+
+fn from_dynamic<T>(dyn_val: &Option<DynamicValue>) -> Result<Value<T>, serde::de::value::Error>
+where
+    T: DeserializeOwned,
+{
+    if let Some(ref dyn_val) = dyn_val {
+        if dyn_val.msgpack.is_empty() {
+            serde_json::from_slice(dyn_val.json.as_slice()).map_err(serde::de::Error::custom)
+        } else {
+            rmp_serde::from_slice(dyn_val.msgpack.as_slice()).map_err(serde::de::Error::custom)
+        }
+    } else {
+        Ok(Value::Null)
+    }
 }
 
 #[derive(Debug)]
@@ -129,8 +148,34 @@ impl tf::provider_server::Provider for CmdProvider {
         &self,
         request: tonic::Request<tf::plan_resource_change::Request>,
     ) -> Result<tonic::Response<tf::plan_resource_change::Response>, tonic::Status> {
+        let request = request.get_ref();
+        #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+        struct Block {}
+        #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+        struct State {
+            read: HashMap<Value<String>, Value<Block>>,
+        }
+        let config = match from_dynamic::<State>(&request.config) {
+            Ok(val) => val,
+            Err(err) => {
+                return Ok(tonic::Response::new(tf::plan_resource_change::Response {
+                    planned_state: None,
+                    requires_replace: vec![],
+                    planned_private: vec![],
+                    diagnostics: vec![tf::Diagnostic {
+                        severity: tf::diagnostic::Severity::Error.into(),
+                        summary: err.to_string().into(),
+                        detail: err.to_string().into(),
+                        attribute: None,
+                    }],
+                    legacy_type_system: false,
+                }))
+            }
+        };
+        eprintln!("POUET");
+        eprintln!("State: {:?}", config);
         Ok(tonic::Response::new(tf::plan_resource_change::Response {
-            planned_state: request.get_ref().proposed_new_state.clone(),
+            planned_state: request.proposed_new_state.clone(),
             requires_replace: vec![],
             planned_private: vec![],
             diagnostics: vec![],

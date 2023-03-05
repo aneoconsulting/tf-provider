@@ -407,8 +407,32 @@ impl<T> From<Option<T>> for Value<T> {
         }
     }
 }
-
 /*
+impl<T> TryFrom<DynamicValue> for Value<T> {
+    type Error = serde::de::value::Error;
+
+    fn try_from(value: DynamicValue) -> Result<Self, Self::Error> {
+        if value.msgpack.is_empty() {
+            serde_json::from_slice(value.json.as_slice()).map_err(serde::de::Error::custom)
+        } else {
+            rmp_serde::from_slice(value.msgpack.as_slice()).map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+
+impl<T> From<DynamicValue> for Value<T> {
+
+    fn from(value: DynamicValue) -> Self {
+        if value.msgpack.is_empty() {
+            serde_json::from_slice(value.json.as_slice())
+        } else {
+            rmp_serde::from_slice(value.msgpack.as_slice())
+        }
+    }
+}
+
+
 impl<T> TryInto<T> for Value<T> {
     type Error = ();
     fn try_into(self) -> Result<T, Self::Error> {
