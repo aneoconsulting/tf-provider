@@ -8,18 +8,27 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = {version = "0.6", features = ["tls"] }
+tonic = { version = "0.6", features = ["tls"] }
 prost = "0.9"
 futures = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
-tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio = { version = "1.0", features = [
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "time",
+] }
 tokio-stream = { version = "0.1.11", features = ["sync", "net"] }
 tokio-util = "0.7"
 
 async-stream = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_bytes = "0.11"
+rmp = "0.8"
+rmp-serde = "1.1"
+rmpv = "1.0"
 rand = "0.7"
 
 async-trait = "0.1"
@@ -28,8 +37,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "fmt", "std"] }
 rcgen = "0.10"
 base64 = "0.13"
-tower-http = {version = "0.1", features=["trace"] }
-rustls = {version = "0.19", features=["dangerous_configuration"]}
+tower-http = { version = "0.1", features = ["trace"] }
+rustls = { version = "0.19", features = ["dangerous_configuration"] }
 webpki = "0.21"
 x509-parser = "0.12"
 time = "0.3"
