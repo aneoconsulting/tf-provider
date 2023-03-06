@@ -1,4 +1,4 @@
-use crate::attribute::AttributePath;
+use crate::{attribute_path::AttributePath, tfplugin6};
 
 /// List of Errors and Warnings to send back to Terraform
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
@@ -111,5 +111,26 @@ impl Diagnostic {
             detail: Default::default(),
             attribute: Default::default(),
         }
+    }
+}
+
+impl From<Diagnostics> for ::prost::alloc::vec::Vec<tfplugin6::Diagnostic> {
+    fn from(value: Diagnostics) -> Self {
+        use tfplugin6::diagnostic::Severity;
+        let map_cvt = |vec: Vec<Diagnostic>, severity: Severity| {
+            vec.into_iter().map(move |diag| tfplugin6::Diagnostic {
+                severity: severity.into(),
+                summary: diag.summary,
+                detail: diag.detail,
+                attribute: if diag.attribute.steps.is_empty() {
+                    None
+                } else {
+                    Some(diag.attribute.into())
+                },
+            })
+        };
+        map_cvt(value.errors, Severity::Error)
+            .chain(map_cvt(value.warnings, Severity::Warning))
+            .collect()
     }
 }

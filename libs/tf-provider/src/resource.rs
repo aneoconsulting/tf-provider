@@ -1,6 +1,6 @@
 use crate::result::{get, Result};
 use crate::schema::Schema;
-use crate::{attribute::AttributePath, dynamic::DynamicValue};
+use crate::{attribute_path::AttributePath, dynamic::DynamicValue};
 
 use serde::{de::DeserializeOwned, Serialize};
 

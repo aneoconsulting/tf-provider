@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::tfplugin6;
+
 /// Represent the path to an attribute
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct AttributePath {
@@ -8,11 +10,12 @@ pub struct AttributePath {
 
 impl AttributePath {
     /// add name access to the path (ie: `.name`)
-    pub fn add_name<T>(&mut self, name: T) -> &mut Self
+    pub fn add_attribute<T>(&mut self, name: T) -> &mut Self
     where
         T: ToString,
     {
-        self.steps.push(AttributePathStep::Name(name.to_string()));
+        self.steps
+            .push(AttributePathStep::Attribute(name.to_string()));
         self
     }
     /// add key access to the path (ie: `["key"]`)
@@ -48,7 +51,9 @@ impl Display for AttributePath {
         let mut sep = "";
         for step in &self.steps {
             match step {
-                AttributePathStep::Name(name) => f.write_fmt(format_args!("{}{}", sep, name))?,
+                AttributePathStep::Attribute(name) => {
+                    f.write_fmt(format_args!("{}{}", sep, name))?
+                }
                 AttributePathStep::Key(key) => f.write_fmt(format_args!("[{:?}]", key))?,
                 AttributePathStep::Index(idx) => f.write_fmt(format_args!("[{}]", idx))?,
             }
@@ -72,9 +77,17 @@ impl std::ops::Add<AttributePathStep> for AttributePath {
     }
 }
 
+impl From<AttributePath> for tfplugin6::AttributePath {
+    fn from(value: AttributePath) -> Self {
+        Self {
+            steps: value.steps.into_iter().map(|step| step.into()).collect(),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum AttributePathStep {
-    Name(String),
+    Attribute(String),
     Key(String),
     Index(i64),
 }
@@ -82,7 +95,7 @@ pub enum AttributePathStep {
 impl Display for AttributePathStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AttributePathStep::Name(name) => f.write_str(name),
+            AttributePathStep::Attribute(name) => f.write_str(name),
             AttributePathStep::Key(key) => f.write_fmt(format_args!("[{:?}]", key)),
             AttributePathStep::Index(idx) => f.write_fmt(format_args!("[{}]", idx)),
         }
@@ -94,6 +107,19 @@ impl std::ops::Add<AttributePathStep> for AttributePathStep {
     fn add(self, rhs: AttributePathStep) -> Self::Output {
         AttributePath {
             steps: vec![self, rhs],
+        }
+    }
+}
+
+impl From<AttributePathStep> for tfplugin6::attribute_path::Step {
+    fn from(value: AttributePathStep) -> Self {
+        use tfplugin6::attribute_path::step::Selector;
+        Self {
+            selector: Some(match value {
+                AttributePathStep::Attribute(name) => Selector::AttributeName(name),
+                AttributePathStep::Key(key) => Selector::ElementKeyString(key),
+                AttributePathStep::Index(idx) => Selector::ElementKeyInt(idx),
+            }),
         }
     }
 }

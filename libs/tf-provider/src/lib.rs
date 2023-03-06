@@ -1,4 +1,4 @@
-pub mod attribute;
+pub mod attribute_path;
 pub mod data_source;
 pub mod diagnostics;
 pub mod dynamic;
