@@ -1,7 +1,3 @@
-//#![feature(once_cell)]
-
-//use std::sync::OnceLock;
-
 use std::fmt::Write;
 use std::pin::Pin;
 

@@ -3,10 +3,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::HashMap;
 
 use self::tf::DynamicValue;
-
-pub mod tf {
-    tonic::include_proto!("tfplugin6");
-}
+use crate::tfplugin6 as tf;
 
 fn from_dynamic<T>(dyn_val: &Option<DynamicValue>) -> Result<Value<T>, serde::de::value::Error>
 where

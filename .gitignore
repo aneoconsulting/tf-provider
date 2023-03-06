@@ -1,4 +1,4 @@
-/target
-/.nix-gcroots
-/.direnv
+target
+.nix-gcroots
+.direnv
 /tf-test

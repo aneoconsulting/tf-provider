@@ -1,4 +1,6 @@
-use crate::diagnostics::Result;
+use crate::data_source::DynamicDataSource;
+use crate::resource::DynamicResource;
+use crate::result::Result;
 use crate::schema::Block;
 use crate::schema::Schema;
 
@@ -8,6 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 trait Provider {
     /// Configuration of the provider
     type Config: Serialize + DeserializeOwned;
+    /// State of the provider metadata
     type MetaState: Serialize + DeserializeOwned;
 
     /// Get the schema of the provider
@@ -17,7 +20,7 @@ trait Provider {
     /// Configure the provider
     fn configure(&mut self, version: i64, config: Self::Config) -> Result<()>;
 
-    /// Get the scema for the provider metadata (defaults to empty)
+    /// Get the schema for the provider metadata (defaults to empty)
     fn meta_schema(&mut self) -> Result<Schema> {
         Schema {
             version: 1,
@@ -25,4 +28,10 @@ trait Provider {
         }
         .into()
     }
+
+    /// Get the resources of the provider
+    fn get_resources(&mut self) -> Result<Vec<Box<dyn DynamicResource>>>;
+
+    /// Get the data sources of the provider
+    fn get_data_sources(&mut self) -> Result<Vec<Box<dyn DynamicDataSource>>>;
 }

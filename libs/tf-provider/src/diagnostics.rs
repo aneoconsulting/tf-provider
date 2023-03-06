@@ -63,6 +63,12 @@ impl Diagnostics {
     pub fn root_warning_short(&mut self, summary: String) -> &mut Self {
         self.add_warning(Diagnostic::root_short(summary))
     }
+    /// Add
+    pub fn add_diagnostics(&mut self, mut diags: Diagnostics) -> &mut Self {
+        self.errors.append(&mut diags.errors);
+        self.warnings.append(&mut diags.warnings);
+        self
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -104,79 +110,6 @@ impl Diagnostic {
             summary,
             detail: Default::default(),
             attribute: Default::default(),
-        }
-    }
-}
-
-/// A value augmented with diagnostics
-/// If there is any error, there is no value
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Result<T> {
-    value: Option<T>,
-    diags: Diagnostics,
-}
-
-impl<T> Default for Result<T> {
-    fn default() -> Self {
-        Result {
-            value: None,
-            diags: Default::default(),
-        }
-    }
-}
-
-impl<T> Result<T> {
-    /// Get a `std::result::Result<T, Diagnostics>` from this
-    pub fn get(self) -> std::result::Result<T, Diagnostics> {
-        if self.diags.errors.is_empty() {
-            self.value.ok_or(self.diags)
-        } else {
-            Err(self.diags)
-        }
-    }
-    /// Get a `std::result::Result<&T, &Diagnostics>` from this
-    pub fn get_ref(&self) -> std::result::Result<&T, &Diagnostics> {
-        if self.diags.errors.is_empty() {
-            self.value.as_ref().ok_or(&self.diags)
-        } else {
-            Err(&self.diags)
-        }
-    }
-    /// Get a `std::result::Result<&mut T, &mut Diagnostics>` from this
-    pub fn get_mut(&mut self) -> std::result::Result<&mut T, &mut Diagnostics> {
-        if self.diags.errors.is_empty() {
-            self.value.as_mut().ok_or(&mut self.diags)
-        } else {
-            Err(&mut self.diags)
-        }
-    }
-
-    /// Construct a `Result` from `Diagnostics`
-    pub fn from_diagnostics(diags: Diagnostics) -> Self {
-        Self {
-            value: None,
-            diags: diags,
-        }
-    }
-    /// Construct a `Result` from a value and `Diagnostics`
-    /// Warning: if there are errors, the value is ignored
-    pub fn with_diagnostics(value: T, diags: Diagnostics) -> Self {
-        Self {
-            value: if diags.errors.is_empty() {
-                Some(value)
-            } else {
-                None
-            },
-            diags: diags,
-        }
-    }
-}
-
-impl<T> From<T> for Result<T> {
-    fn from(value: T) -> Self {
-        Self {
-            value: Some(value),
-            diags: Default::default(),
         }
     }
 }
