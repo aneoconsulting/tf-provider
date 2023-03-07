@@ -19,42 +19,58 @@ impl Diagnostics {
         self.warnings.push(diag)
     }
     /// Add an error
-    pub fn error(&mut self, summary: String, detail: String, attribute: AttributePath) {
+    pub fn error<S: ToString, D: ToString>(
+        &mut self,
+        summary: S,
+        detail: D,
+        attribute: AttributePath,
+    ) {
         self.add_error(Diagnostic::new(summary, detail, attribute))
     }
     /// Add an error without AttributePath
-    pub fn root_error(&mut self, summary: String, detail: String) {
+    pub fn root_error<S: ToString, D: ToString>(&mut self, summary: S, detail: D) {
         self.add_error(Diagnostic::root(summary, detail))
     }
     /// Add an error without details
-    pub fn error_short(&mut self, summary: String, attribute: AttributePath) {
+    pub fn error_short<S: ToString>(&mut self, summary: S, attribute: AttributePath) {
         self.add_error(Diagnostic::short(summary, attribute))
     }
     /// Add an error without AttributePath nor details
-    pub fn root_error_short(&mut self, summary: String) {
+    pub fn root_error_short<S: ToString>(&mut self, summary: S) {
         self.add_error(Diagnostic::root_short(summary))
     }
 
     /// Add a warning
-    pub fn warning(&mut self, summary: String, detail: String, attribute: AttributePath) {
+    pub fn warning<S: ToString, D: ToString>(
+        &mut self,
+        summary: S,
+        detail: D,
+        attribute: AttributePath,
+    ) {
         self.add_warning(Diagnostic::new(summary, detail, attribute))
     }
     /// Add a warning without AttributePath
-    pub fn root_warning(&mut self, summary: String, detail: String) {
+    pub fn root_warning<S: ToString, D: ToString>(&mut self, summary: S, detail: D) {
         self.add_warning(Diagnostic::root(summary, detail))
     }
     /// Add a warning without details
-    pub fn error_warning(&mut self, summary: String, attribute: AttributePath) {
+    pub fn error_warning<S: ToString>(&mut self, summary: S, attribute: AttributePath) {
         self.add_warning(Diagnostic::short(summary, attribute))
     }
     /// Add a warning without AttributePath nor details
-    pub fn root_warning_short(&mut self, summary: String) {
+    pub fn root_warning_short<S: ToString>(&mut self, summary: S) {
         self.add_warning(Diagnostic::root_short(summary))
     }
     /// Add
     pub fn add_diagnostics(&mut self, mut diags: Diagnostics) {
         self.errors.append(&mut diags.errors);
         self.warnings.append(&mut diags.warnings);
+    }
+    /// Add an internal error if there is no existing errors
+    pub fn internal_error(&mut self) {
+        if self.errors.is_empty() {
+            self.root_error_short("Internal error");
+        }
     }
 }
 
@@ -68,33 +84,33 @@ pub struct Diagnostic {
 /// Diagnostic
 impl Diagnostic {
     /// Create a diagnostic
-    pub fn new(summary: String, detail: String, attribute: AttributePath) -> Self {
+    pub fn new<S: ToString, D: ToString>(summary: S, detail: D, attribute: AttributePath) -> Self {
         Self {
-            summary,
-            detail,
+            summary: summary.to_string(),
+            detail: detail.to_string(),
             attribute,
         }
     }
     /// Create a diagnostic without AttributePath
-    pub fn root(summary: String, detail: String) -> Self {
+    pub fn root<S: ToString, D: ToString>(summary: S, detail: D) -> Self {
         Self {
-            summary,
-            detail,
+            summary: summary.to_string(),
+            detail: detail.to_string(),
             attribute: Default::default(),
         }
     }
     /// Create a diagnostic without details
-    pub fn short(summary: String, attribute: AttributePath) -> Self {
+    pub fn short<S: ToString>(summary: S, attribute: AttributePath) -> Self {
         Self {
-            summary,
+            summary: summary.to_string(),
             detail: Default::default(),
             attribute,
         }
     }
     /// Create a diagnostic AttributePath nor details
-    pub fn root_short(summary: String) -> Self {
+    pub fn root_short<S: ToString>(summary: S) -> Self {
         Self {
-            summary,
+            summary: summary.to_string(),
             detail: Default::default(),
             attribute: Default::default(),
         }

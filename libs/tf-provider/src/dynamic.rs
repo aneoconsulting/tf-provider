@@ -1,4 +1,4 @@
-use crate::{result::Result, tfplugin6};
+use crate::{diagnostics::Diagnostics, tfplugin6};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -8,30 +8,45 @@ pub enum DynamicValue {
 }
 
 impl DynamicValue {
-    pub fn deserialize<T>(&self) -> Result<T>
+    pub fn deserialize<T>(&self, diags: &mut Diagnostics) -> Option<T>
     where
         T: DeserializeOwned,
     {
         match self {
             Self::MessagePack(mp) => match rmp_serde::from_slice::<T>(mp.as_slice()) {
-                Ok(value) => Result::from(value),
-                Err(err) => Result::from_error(err),
+                Ok(value) => Some(value),
+                Err(err) => {
+                    diags.root_error_short(err.to_string());
+                    None
+                }
             },
             Self::Json(json) => match serde_json::from_slice::<T>(json.as_slice()) {
-                Ok(value) => Result::from(value),
-                Err(err) => Result::from_error(err),
+                Ok(value) => Some(value),
+                Err(err) => {
+                    diags.root_error_short(err);
+                    None
+                }
             },
         }
     }
 
-    pub fn serialize<T>(value: &T) -> Result<DynamicValue>
+    pub fn serialize_vec<T>(diags: &mut Diagnostics, value: &T) -> Option<Vec<u8>>
     where
         T: Serialize,
     {
         match rmp_serde::to_vec(value) {
-            Ok(value) => Result::from(Self::MessagePack(value)),
-            Err(err) => Result::from_error(err),
+            Ok(value) => Some(value),
+            Err(err) => {
+                diags.root_error_short(err);
+                None
+            }
         }
+    }
+    pub fn serialize<T>(diags: &mut Diagnostics, value: &T) -> Option<DynamicValue>
+    where
+        T: Serialize,
+    {
+        Some(Self::MessagePack(Self::serialize_vec(diags, value)?))
     }
 }
 

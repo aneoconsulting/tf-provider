@@ -1,6 +1,8 @@
-use crate::result::{get, Result};
+use crate::attribute_path::AttributePath;
+use crate::diagnostics::Diagnostics;
+use crate::dynamic::DynamicValue;
 use crate::schema::Schema;
-use crate::{attribute_path::AttributePath, dynamic::DynamicValue};
+use crate::utils::OptionFactor;
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -14,171 +16,236 @@ pub trait Resource: Send + Sync {
     type ProviderMetaState: Serialize + DeserializeOwned;
 
     /// Get the schema of the resource
-    fn schema(&self) -> Result<Schema>;
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the resource
-    fn validate(&self, config: Self::State) -> Result<()>;
+    fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()>;
     /// Read the new state of the resource
     fn read(
         &self,
+        diags: &mut Diagnostics,
         state: Self::State,
         private_state: Self::PrivateState,
         provider_meta_state: Self::ProviderMetaState,
-    ) -> Result<(Self::State, Self::PrivateState)>;
+    ) -> Option<(Self::State, Self::PrivateState)>;
     /// Plan the changes on the resource
     fn plan(
         &self,
+        diags: &mut Diagnostics,
         prior_state: Self::State,
         proposed_state: Self::State,
         config_state: Self::State,
         prior_private_state: Self::PrivateState,
         provider_meta_state: Self::ProviderMetaState,
-    ) -> Result<(Self::State, Self::PrivateState, Vec<AttributePath>)>;
+    ) -> Option<(Self::State, Self::PrivateState, Vec<AttributePath>)>;
     /// Apply the changes on the resource
     fn apply(
         &self,
+        diags: &mut Diagnostics,
         prior_state: Self::State,
         planned_state: Self::State,
         config_state: Self::State,
         planned_private_state: Self::PrivateState,
         provider_meta_state: Self::ProviderMetaState,
-    ) -> Result<(Self::State, Self::PrivateState)>;
+    ) -> Option<(Self::State, Self::PrivateState)>;
     /// Import an existing resource
-    fn import(&self, id: String) -> Result<(Self::State, Self::PrivateState)> {
+    fn import(
+        &self,
+        diags: &mut Diagnostics,
+        id: String,
+    ) -> Option<(Self::State, Self::PrivateState)> {
         _ = id;
-        Result::from_error("Import is not supported")
+        diags.root_error_short("Import is not supported");
+        None
     }
     /// Upgrade the resource
-    fn upgrade(&self, version: i64, prior_state: DynamicValue) -> Result<Self::State> {
+    fn upgrade(
+        &self,
+        diags: &mut Diagnostics,
+        version: i64,
+        prior_state: DynamicValue,
+    ) -> Option<Self::State> {
         _ = version;
         _ = prior_state;
-        Result::from_error("Upgrade is not supported")
+        diags.root_error_short("Upgrade is not supported");
+        None
     }
 }
 
 pub trait DynamicResource: Send + Sync {
     /// Get the schema of the resource
-    fn schema(&self) -> Result<Schema>;
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the resource
-    fn validate(&self, config: DynamicValue) -> Result<()>;
+    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
     /// Read the new state of the resource
     fn read(
         &self,
+        diags: &mut Diagnostics,
         state: DynamicValue,
-        private_state: DynamicValue,
+        private_state: Vec<u8>,
         provider_meta_state: DynamicValue,
-    ) -> Result<(DynamicValue, DynamicValue)>;
+    ) -> Option<(DynamicValue, Vec<u8>)>;
     /// Plan the changes on the resource
     fn plan(
         &self,
+        diags: &mut Diagnostics,
         prior_state: DynamicValue,
         proposed_state: DynamicValue,
         config_state: DynamicValue,
-        prior_private_state: DynamicValue,
+        prior_private_state: Vec<u8>,
         provider_meta_state: DynamicValue,
-    ) -> Result<(DynamicValue, DynamicValue, Vec<AttributePath>)>;
+    ) -> Option<(DynamicValue, Vec<u8>, Vec<AttributePath>)>;
     /// Apply the changes on the resource
     fn apply(
         &self,
+        diags: &mut Diagnostics,
         prior_state: DynamicValue,
         planned_state: DynamicValue,
         config_state: DynamicValue,
-        planned_private_state: DynamicValue,
+        planned_private_state: Vec<u8>,
         provider_meta_state: DynamicValue,
-    ) -> Result<(DynamicValue, DynamicValue)>;
-    fn import(&self, id: String) -> Result<(DynamicValue, DynamicValue)>;
-    fn upgrade(&self, version: i64, prior_state: DynamicValue) -> Result<DynamicValue>;
+    ) -> Option<(DynamicValue, Vec<u8>)>;
+    /// Import an existing resource
+    fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(DynamicValue, Vec<u8>)> {
+        _ = id;
+        diags.root_error_short("Import is not supported");
+        None
+    }
+    /// Upgrade the resource
+    fn upgrade(
+        &self,
+        diags: &mut Diagnostics,
+        version: i64,
+        prior_state: DynamicValue,
+    ) -> Option<DynamicValue> {
+        _ = version;
+        _ = prior_state;
+        diags.root_error_short("Upgrade is not supported");
+        None
+    }
 }
 
 impl<T: Resource> DynamicResource for T {
     /// Get the schema of the resource
-    fn schema(&self) -> Result<Schema> {
-        <T as Resource>::schema(self)
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
+        <T as Resource>::schema(self, diags)
     }
     /// Validate the configuration of the resource
-    fn validate(&self, config: DynamicValue) -> Result<()> {
-        let config = get!(config.deserialize());
-        <T as Resource>::validate(self, config)
+    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
+        let config = config.deserialize(diags)?;
+        <T as Resource>::validate(self, diags, config)
     }
     /// Read the new state of the resource
     fn read(
         &self,
+        diags: &mut Diagnostics,
         state: DynamicValue,
-        private_state: DynamicValue,
+        private_state: Vec<u8>,
         provider_meta_state: DynamicValue,
-    ) -> Result<(DynamicValue, DynamicValue)> {
-        let state = get!(state.deserialize());
-        let private_state = get!(private_state.deserialize());
-        let provider_meta_state = get!(provider_meta_state.deserialize());
-        let (state, private_state) = get!(<T as Resource>::read(
-            self,
-            state,
-            private_state,
-            provider_meta_state
-        ));
-        let state = get!(DynamicValue::serialize(&state));
-        let private_state = get!(DynamicValue::serialize(&private_state));
-        Result::from((state, private_state))
+    ) -> Option<(DynamicValue, Vec<u8>)> {
+        let (state, private_state, provider_meta_state) = (
+            state.deserialize(diags),
+            DynamicValue::MessagePack(private_state).deserialize(diags),
+            provider_meta_state.deserialize(diags),
+        )
+            .factor()?;
+
+        let (state, private_state) =
+            <T as Resource>::read(self, diags, state, private_state, provider_meta_state)?;
+
+        (
+            DynamicValue::serialize(diags, &state),
+            DynamicValue::serialize_vec(diags, &private_state),
+        )
+            .factor()
     }
     /// Plan the changes on the resource
     fn plan(
         &self,
+        diags: &mut Diagnostics,
         prior_state: DynamicValue,
         proposed_state: DynamicValue,
         config_state: DynamicValue,
-        prior_private_state: DynamicValue,
+        prior_private_state: Vec<u8>,
         provider_meta_state: DynamicValue,
-    ) -> Result<(DynamicValue, DynamicValue, Vec<AttributePath>)> {
-        let prior_state = get!(prior_state.deserialize());
-        let proposed_state = get!(proposed_state.deserialize());
-        let config_state = get!(config_state.deserialize());
-        let prior_private_state = get!(prior_private_state.deserialize());
-        let provider_meta_state = get!(provider_meta_state.deserialize());
-        let (state, private_state, destroy_triggers) = get!(<T as Resource>::plan(
+    ) -> Option<(DynamicValue, Vec<u8>, Vec<AttributePath>)> {
+        let (prior_state, proposed_state, config_state, prior_private_state, provider_meta_state) =
+            (
+                prior_state.deserialize(diags),
+                proposed_state.deserialize(diags),
+                config_state.deserialize(diags),
+                DynamicValue::MessagePack(prior_private_state).deserialize(diags),
+                provider_meta_state.deserialize(diags),
+            )
+                .factor()?;
+
+        let (state, private_state, destroy_triggers) = <T as Resource>::plan(
             self,
+            diags,
             prior_state,
             proposed_state,
             config_state,
             prior_private_state,
-            provider_meta_state
-        ));
-        let state = get!(DynamicValue::serialize(&state));
-        let private_state = get!(DynamicValue::serialize(&private_state));
-        Result::from((state, private_state, destroy_triggers))
+            provider_meta_state,
+        )?;
+
+        (
+            DynamicValue::serialize(diags, &state),
+            DynamicValue::serialize_vec(diags, &private_state),
+            Some(destroy_triggers),
+        )
+            .factor()
     }
     /// Apply the changes on the resource
     fn apply(
         &self,
+        diags: &mut Diagnostics,
         prior_state: DynamicValue,
         planned_state: DynamicValue,
         config_state: DynamicValue,
-        planned_private_state: DynamicValue,
+        planned_private_state: Vec<u8>,
         provider_meta_state: DynamicValue,
-    ) -> Result<(DynamicValue, DynamicValue)> {
-        let prior_state = get!(prior_state.deserialize());
-        let planned_state = get!(planned_state.deserialize());
-        let config_state = get!(config_state.deserialize());
-        let planned_private_state = get!(planned_private_state.deserialize());
-        let provider_meta_state = get!(provider_meta_state.deserialize());
-        let (state, private_state) = get!(<T as Resource>::apply(
+    ) -> Option<(DynamicValue, Vec<u8>)> {
+        let (prior_state, planned_state, config_state, planned_private_state, provider_meta_state) =
+            (
+                prior_state.deserialize(diags),
+                planned_state.deserialize(diags),
+                config_state.deserialize(diags),
+                DynamicValue::MessagePack(planned_private_state).deserialize(diags),
+                provider_meta_state.deserialize(diags),
+            )
+                .factor()?;
+        let (state, private_state) = <T as Resource>::apply(
             self,
+            diags,
             prior_state,
             planned_state,
             config_state,
             planned_private_state,
-            provider_meta_state
-        ));
-        let state = get!(DynamicValue::serialize(&state));
-        let private_state = get!(DynamicValue::serialize(&private_state));
-        Result::from((state, private_state))
+            provider_meta_state,
+        )?;
+        (
+            DynamicValue::serialize(diags, &state),
+            DynamicValue::serialize_vec(diags, &private_state),
+        )
+            .factor()
     }
-    fn import(&self, id: String) -> Result<(DynamicValue, DynamicValue)> {
-        let (state, private_state) = get!(<T as Resource>::import(self, id));
-        let state = get!(DynamicValue::serialize(&state));
-        let private_state = get!(DynamicValue::serialize(&private_state));
-        Result::from((state, private_state))
+    /// Import an existing resource
+    fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(DynamicValue, Vec<u8>)> {
+        let (state, private_state) = <T as Resource>::import(self, diags, id)?;
+        (
+            DynamicValue::serialize(diags, &state),
+            DynamicValue::serialize_vec(diags, &private_state),
+        )
+            .factor()
     }
-    fn upgrade(&self, version: i64, prior_state: DynamicValue) -> Result<DynamicValue> {
-        let state = get!(<T as Resource>::upgrade(self, version, prior_state));
-        DynamicValue::serialize(&state)
+    /// Upgrade the resource
+    fn upgrade(
+        &self,
+        diags: &mut Diagnostics,
+        version: i64,
+        prior_state: DynamicValue,
+    ) -> Option<DynamicValue> {
+        let state = <T as Resource>::upgrade(self, diags, version, prior_state)?;
+        DynamicValue::serialize(diags, &state)
     }
 }

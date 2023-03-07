@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
 use crate::data_source::DynamicDataSource;
+use crate::diagnostics::Diagnostics;
 use crate::dynamic::DynamicValue;
 use crate::resource::DynamicResource;
-use crate::result::get;
-use crate::result::Result;
 use crate::schema::Block;
 use crate::schema::Schema;
 
@@ -18,14 +17,20 @@ pub trait Provider: Send + Sync + 'static {
     type MetaState: Serialize + DeserializeOwned;
 
     /// Get the schema of the provider
-    fn schema(&self) -> Result<Schema>;
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the provider
-    fn validate(&self, config: Self::Config) -> Result<()>;
+    fn validate(&self, diags: &mut Diagnostics, config: Self::Config) -> Option<()>;
     /// Configure the provider
-    fn configure(&self, version: i64, config: Self::Config) -> Result<()>;
+    fn configure(
+        &self,
+        diags: &mut Diagnostics,
+        terraform_version: String,
+        config: Self::Config,
+    ) -> Option<()>;
 
     /// Get the schema for the provider metadata (defaults to empty)
-    fn meta_schema(&self) -> Result<Schema> {
+    fn meta_schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
+        _ = diags;
         Schema {
             version: 1,
             block: Block::empty(),
@@ -34,64 +39,92 @@ pub trait Provider: Send + Sync + 'static {
     }
 
     /// Get the resources of the provider
-    fn get_resources<'a>(&'a self) -> Result<&'a HashMap<String, Box<dyn DynamicResource>>>;
+    fn get_resources<'a>(
+        &'a self,
+        diags: &mut Diagnostics,
+    ) -> Option<&'a HashMap<String, Box<dyn DynamicResource>>>;
 
     /// Get the data sources of the provider
-    fn get_data_sources<'a>(&'a self) -> Result<&'a HashMap<String, Box<dyn DynamicDataSource>>>;
+    fn get_data_sources<'a>(
+        &'a self,
+        diags: &mut Diagnostics,
+    ) -> Option<&'a HashMap<String, Box<dyn DynamicDataSource>>>;
 }
 
 pub trait DynamicProvider: Send + Sync + 'static {
     /// Get the schema of the provider
-    fn schema(&self) -> Result<Schema>;
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the provider
-    fn validate(&self, config: DynamicValue) -> Result<()>;
+    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
     /// Configure the provider
-    fn configure(&self, version: i64, config: DynamicValue) -> Result<()>;
+    fn configure(
+        &self,
+        diags: &mut Diagnostics,
+        terraform_version: String,
+        config: DynamicValue,
+    ) -> Option<()>;
 
     /// Get the schema for the provider metadata (defaults to empty)
-    fn meta_schema(&self) -> Result<Schema> {
-        Schema {
+    fn meta_schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
+        _ = diags;
+        Some(Schema {
             version: 1,
             block: Block::empty(),
-        }
-        .into()
+        })
     }
 
     /// Get the resources of the provider
-    fn get_resources<'a>(&'a self) -> Result<&'a HashMap<String, Box<dyn DynamicResource>>>;
+    fn get_resources<'a>(
+        &'a self,
+        diags: &mut Diagnostics,
+    ) -> Option<&'a HashMap<String, Box<dyn DynamicResource>>>;
 
     /// Get the data sources of the provider
-    fn get_data_sources<'a>(&'a self) -> Result<&'a HashMap<String, Box<dyn DynamicDataSource>>>;
+    fn get_data_sources<'a>(
+        &'a self,
+        diags: &mut Diagnostics,
+    ) -> Option<&'a HashMap<String, Box<dyn DynamicDataSource>>>;
 }
 
 impl<T: Provider> DynamicProvider for T {
     /// Get the schema of the provider
-    fn schema(&self) -> Result<Schema> {
-        <T as Provider>::schema(self)
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
+        <T as Provider>::schema(self, diags)
     }
     /// Validate the configuration of the provider
-    fn validate(&self, config: DynamicValue) -> Result<()> {
-        let config = get!(config.deserialize());
-        <T as Provider>::validate(self, config)
+    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
+        let config = config.deserialize(diags)?;
+        <T as Provider>::validate(self, diags, config)
     }
     /// Configure the provider
-    fn configure(&self, version: i64, config: DynamicValue) -> Result<()> {
-        let config = get!(config.deserialize());
-        <T as Provider>::configure(self, version, config)
+    fn configure(
+        &self,
+        diags: &mut Diagnostics,
+        terraform_version: String,
+        config: DynamicValue,
+    ) -> Option<()> {
+        let config = config.deserialize(diags)?;
+        <T as Provider>::configure(self, diags, terraform_version, config)
     }
 
     /// Get the schema for the provider metadata (defaults to empty)
-    fn meta_schema(&self) -> Result<Schema> {
-        <T as Provider>::meta_schema(self)
+    fn meta_schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
+        <T as Provider>::meta_schema(self, diags)
     }
 
     /// Get the resources of the provider
-    fn get_resources<'a>(&'a self) -> Result<&'a HashMap<String, Box<dyn DynamicResource>>> {
-        <T as Provider>::get_resources(self)
+    fn get_resources<'a>(
+        &'a self,
+        diags: &mut Diagnostics,
+    ) -> Option<&'a HashMap<String, Box<dyn DynamicResource>>> {
+        <T as Provider>::get_resources(self, diags)
     }
 
     /// Get the data sources of the provider
-    fn get_data_sources<'a>(&'a self) -> Result<&'a HashMap<String, Box<dyn DynamicDataSource>>> {
-        <T as Provider>::get_data_sources(self)
+    fn get_data_sources<'a>(
+        &'a self,
+        diags: &mut Diagnostics,
+    ) -> Option<&'a HashMap<String, Box<dyn DynamicDataSource>>> {
+        <T as Provider>::get_data_sources(self, diags)
     }
 }

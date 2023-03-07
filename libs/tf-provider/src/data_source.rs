@@ -1,56 +1,64 @@
+use crate::diagnostics::Diagnostics;
+use crate::dynamic::DynamicValue;
 use crate::schema::Schema;
-use crate::{
-    dynamic::DynamicValue,
-    result::{get, Result},
-};
+use crate::utils::OptionFactor;
 
 use serde::{de::DeserializeOwned, Serialize};
 
 /// Trait for implementing a data source
-trait DataSource: Send + Sync {
+pub trait DataSource: Send + Sync {
     /// State of the data source
     type State: Serialize + DeserializeOwned;
     /// State of the provider metadata
     type ProviderMetaState: Serialize + DeserializeOwned;
 
     /// Get the schema of the data source
-    fn schema(&self) -> Result<Schema>;
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the data source
-    fn validate(&self, config: Self::State) -> Result<()>;
+    fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()>;
     /// Read the new state of the data source
     fn read(
         &self,
+        diags: &mut Diagnostics,
         config: Self::State,
         provider_meta_state: Self::ProviderMetaState,
-    ) -> Result<Self::State>;
+    ) -> Option<Self::State>;
 }
 
 pub trait DynamicDataSource: Send + Sync {
     /// Get the schema of the data source
-    fn schema(&self) -> Result<Schema>;
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the data source
-    fn validate(&self, config: DynamicValue) -> Result<()>;
+    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
     /// Read the new state of the data source
-    fn read(&self, config: DynamicValue, provider_meta_state: DynamicValue)
-        -> Result<DynamicValue>;
+    fn read(
+        &self,
+        diags: &mut Diagnostics,
+        config: DynamicValue,
+        provider_meta_state: DynamicValue,
+    ) -> Option<DynamicValue>;
 }
 
 impl<T: DataSource> DynamicDataSource for T {
-    fn schema(&self) -> Result<Schema> {
-        <T as DataSource>::schema(self)
+    fn schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
+        <T as DataSource>::schema(self, diags)
     }
-    fn validate(&self, config: DynamicValue) -> Result<()> {
-        let config = get!(config.deserialize());
-        <T as DataSource>::validate(self, config)
+    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
+        let config = config.deserialize(diags)?;
+        <T as DataSource>::validate(self, diags, config)
     }
     fn read(
         &self,
+        diags: &mut Diagnostics,
         config: DynamicValue,
         provider_meta_state: DynamicValue,
-    ) -> Result<DynamicValue> {
-        let config = get!(config.deserialize());
-        let provider_meta_state = get!(provider_meta_state.deserialize());
-        let state = get!(<T as DataSource>::read(self, config, provider_meta_state));
-        DynamicValue::serialize(&state)
+    ) -> Option<DynamicValue> {
+        let (config, provider_meta_state) = (
+            config.deserialize(diags),
+            provider_meta_state.deserialize(diags),
+        )
+            .factor()?;
+        let state = <T as DataSource>::read(self, diags, config, provider_meta_state)?;
+        DynamicValue::serialize(diags, &state)
     }
 }
