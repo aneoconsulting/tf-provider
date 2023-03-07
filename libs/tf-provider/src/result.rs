@@ -51,6 +51,31 @@ impl<T> Result<T> {
         }
     }
 
+    pub fn into_option(self, diags: &mut Diagnostics) -> Option<T> {
+        let has_errors = self.has_errors();
+        diags.add_diagnostics(self.diags);
+        if has_errors {
+            None
+        } else {
+            self.value
+        }
+    }
+
+    /// Combine many diagnostics into one
+    pub fn combine<Cout, Cin>(collection: Cin) -> Result<Cout>
+    where
+        Cin: IntoIterator<Item = Result<T>>,
+        Cout: FromIterator<T>,
+    {
+        let mut diags = Diagnostics::default();
+        let collection: Cout = collection
+            .into_iter()
+            .filter_map(|result| result.into_option(&mut diags))
+            .collect();
+
+        Result::with_diagnostics(collection, diags)
+    }
+
     /// Construct a `Result` from `Diagnostics`
     pub fn from_diagnostics(diags: Diagnostics) -> Self {
         Self {
@@ -141,5 +166,23 @@ macro_rules! get(
         None => return Result::default(),
     }})
 );
+
+/*
+macro_rules! combine(
+    ($($x:expr),+) => {
+        let mut diags = Diagnostics::default();
+        let mut has_errors = false;
+        let tuple = ($(
+            {
+                let result : Result<_> = $x;
+                diags.add_diagnostics(result.diags);
+                if result {
+
+                }
+            }
+        ),*;
+    }
+);
+*/
 
 pub(crate) use get;

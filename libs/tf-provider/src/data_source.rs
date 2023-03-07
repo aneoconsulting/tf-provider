@@ -7,47 +7,44 @@ use crate::{
 use serde::{de::DeserializeOwned, Serialize};
 
 /// Trait for implementing a data source
-trait DataSource {
+trait DataSource: Send + Sync {
     /// State of the data source
     type State: Serialize + DeserializeOwned;
     /// State of the provider metadata
     type ProviderMetaState: Serialize + DeserializeOwned;
 
     /// Get the schema of the data source
-    fn schema(&mut self) -> Result<Schema>;
+    fn schema(&self) -> Result<Schema>;
     /// Validate the configuration of the data source
-    fn validate(&mut self, config: Self::State) -> Result<()>;
+    fn validate(&self, config: Self::State) -> Result<()>;
     /// Read the new state of the data source
     fn read(
-        &mut self,
+        &self,
         config: Self::State,
         provider_meta_state: Self::ProviderMetaState,
     ) -> Result<Self::State>;
 }
 
-pub trait DynamicDataSource {
+pub trait DynamicDataSource: Send + Sync {
     /// Get the schema of the data source
-    fn schema(&mut self) -> Result<Schema>;
+    fn schema(&self) -> Result<Schema>;
     /// Validate the configuration of the data source
-    fn validate(&mut self, config: DynamicValue) -> Result<()>;
+    fn validate(&self, config: DynamicValue) -> Result<()>;
     /// Read the new state of the data source
-    fn read(
-        &mut self,
-        config: DynamicValue,
-        provider_meta_state: DynamicValue,
-    ) -> Result<DynamicValue>;
+    fn read(&self, config: DynamicValue, provider_meta_state: DynamicValue)
+        -> Result<DynamicValue>;
 }
 
 impl<T: DataSource> DynamicDataSource for T {
-    fn schema(&mut self) -> Result<Schema> {
+    fn schema(&self) -> Result<Schema> {
         <T as DataSource>::schema(self)
     }
-    fn validate(&mut self, config: DynamicValue) -> Result<()> {
+    fn validate(&self, config: DynamicValue) -> Result<()> {
         let config = get!(config.deserialize());
         <T as DataSource>::validate(self, config)
     }
     fn read(
-        &mut self,
+        &self,
         config: DynamicValue,
         provider_meta_state: DynamicValue,
     ) -> Result<DynamicValue> {

@@ -5,7 +5,7 @@ use crate::{attribute_path::AttributePath, dynamic::DynamicValue};
 use serde::{de::DeserializeOwned, Serialize};
 
 /// Trait for implementing a resource
-pub trait Resource {
+pub trait Resource: Send + Sync {
     /// State of the resource
     type State: Serialize + DeserializeOwned;
     /// Private state of the resource
@@ -14,19 +14,19 @@ pub trait Resource {
     type ProviderMetaState: Serialize + DeserializeOwned;
 
     /// Get the schema of the resource
-    fn schema(&mut self) -> Result<Schema>;
+    fn schema(&self) -> Result<Schema>;
     /// Validate the configuration of the resource
-    fn validate(&mut self, config: Self::State) -> Result<()>;
+    fn validate(&self, config: Self::State) -> Result<()>;
     /// Read the new state of the resource
     fn read(
-        &mut self,
+        &self,
         state: Self::State,
         private_state: Self::PrivateState,
         provider_meta_state: Self::ProviderMetaState,
     ) -> Result<(Self::State, Self::PrivateState)>;
     /// Plan the changes on the resource
     fn plan(
-        &mut self,
+        &self,
         prior_state: Self::State,
         proposed_state: Self::State,
         config_state: Self::State,
@@ -35,7 +35,7 @@ pub trait Resource {
     ) -> Result<(Self::State, Self::PrivateState, Vec<AttributePath>)>;
     /// Apply the changes on the resource
     fn apply(
-        &mut self,
+        &self,
         prior_state: Self::State,
         planned_state: Self::State,
         config_state: Self::State,
@@ -43,33 +43,33 @@ pub trait Resource {
         provider_meta_state: Self::ProviderMetaState,
     ) -> Result<(Self::State, Self::PrivateState)>;
     /// Import an existing resource
-    fn import(&mut self, id: String) -> Result<(Self::State, Self::PrivateState)> {
+    fn import(&self, id: String) -> Result<(Self::State, Self::PrivateState)> {
         _ = id;
         Result::from_error("Import is not supported")
     }
     /// Upgrade the resource
-    fn upgrade(&mut self, version: i64, prior_state: DynamicValue) -> Result<Self::State> {
+    fn upgrade(&self, version: i64, prior_state: DynamicValue) -> Result<Self::State> {
         _ = version;
         _ = prior_state;
         Result::from_error("Upgrade is not supported")
     }
 }
 
-pub trait DynamicResource {
+pub trait DynamicResource: Send + Sync {
     /// Get the schema of the resource
-    fn schema(&mut self) -> Result<Schema>;
+    fn schema(&self) -> Result<Schema>;
     /// Validate the configuration of the resource
-    fn validate(&mut self, config: DynamicValue) -> Result<()>;
+    fn validate(&self, config: DynamicValue) -> Result<()>;
     /// Read the new state of the resource
     fn read(
-        &mut self,
+        &self,
         state: DynamicValue,
         private_state: DynamicValue,
         provider_meta_state: DynamicValue,
     ) -> Result<(DynamicValue, DynamicValue)>;
     /// Plan the changes on the resource
     fn plan(
-        &mut self,
+        &self,
         prior_state: DynamicValue,
         proposed_state: DynamicValue,
         config_state: DynamicValue,
@@ -78,30 +78,30 @@ pub trait DynamicResource {
     ) -> Result<(DynamicValue, DynamicValue, Vec<AttributePath>)>;
     /// Apply the changes on the resource
     fn apply(
-        &mut self,
+        &self,
         prior_state: DynamicValue,
         planned_state: DynamicValue,
         config_state: DynamicValue,
         planned_private_state: DynamicValue,
         provider_meta_state: DynamicValue,
     ) -> Result<(DynamicValue, DynamicValue)>;
-    fn import(&mut self, id: String) -> Result<(DynamicValue, DynamicValue)>;
-    fn upgrade(&mut self, version: i64, prior_state: DynamicValue) -> Result<DynamicValue>;
+    fn import(&self, id: String) -> Result<(DynamicValue, DynamicValue)>;
+    fn upgrade(&self, version: i64, prior_state: DynamicValue) -> Result<DynamicValue>;
 }
 
 impl<T: Resource> DynamicResource for T {
     /// Get the schema of the resource
-    fn schema(&mut self) -> Result<Schema> {
+    fn schema(&self) -> Result<Schema> {
         <T as Resource>::schema(self)
     }
     /// Validate the configuration of the resource
-    fn validate(&mut self, config: DynamicValue) -> Result<()> {
+    fn validate(&self, config: DynamicValue) -> Result<()> {
         let config = get!(config.deserialize());
         <T as Resource>::validate(self, config)
     }
     /// Read the new state of the resource
     fn read(
-        &mut self,
+        &self,
         state: DynamicValue,
         private_state: DynamicValue,
         provider_meta_state: DynamicValue,
@@ -121,7 +121,7 @@ impl<T: Resource> DynamicResource for T {
     }
     /// Plan the changes on the resource
     fn plan(
-        &mut self,
+        &self,
         prior_state: DynamicValue,
         proposed_state: DynamicValue,
         config_state: DynamicValue,
@@ -147,7 +147,7 @@ impl<T: Resource> DynamicResource for T {
     }
     /// Apply the changes on the resource
     fn apply(
-        &mut self,
+        &self,
         prior_state: DynamicValue,
         planned_state: DynamicValue,
         config_state: DynamicValue,
@@ -171,13 +171,13 @@ impl<T: Resource> DynamicResource for T {
         let private_state = get!(DynamicValue::serialize(&private_state));
         Result::from((state, private_state))
     }
-    fn import(&mut self, id: String) -> Result<(DynamicValue, DynamicValue)> {
+    fn import(&self, id: String) -> Result<(DynamicValue, DynamicValue)> {
         let (state, private_state) = get!(<T as Resource>::import(self, id));
         let state = get!(DynamicValue::serialize(&state));
         let private_state = get!(DynamicValue::serialize(&private_state));
         Result::from((state, private_state))
     }
-    fn upgrade(&mut self, version: i64, prior_state: DynamicValue) -> Result<DynamicValue> {
+    fn upgrade(&self, version: i64, prior_state: DynamicValue) -> Result<DynamicValue> {
         let state = get!(<T as Resource>::upgrade(self, version, prior_state));
         DynamicValue::serialize(&state)
     }

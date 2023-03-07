@@ -7,6 +7,7 @@ pub mod provider;
 pub mod resource;
 pub mod result;
 pub mod schema;
+pub mod tf6provider;
 pub mod tfprovider;
 pub mod value;
 

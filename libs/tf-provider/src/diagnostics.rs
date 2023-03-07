@@ -11,63 +11,50 @@ pub struct Diagnostics {
 
 impl Diagnostics {
     /// Add an error diagnostic
-    pub fn add_error(&mut self, diag: Diagnostic) -> &mut Self {
-        self.errors.push(diag);
-        self
+    pub fn add_error(&mut self, diag: Diagnostic) {
+        self.errors.push(diag)
     }
     /// Add a warning diagnostic
-    pub fn add_warning(&mut self, diag: Diagnostic) -> &mut Self {
-        self.warnings.push(diag);
-        self
+    pub fn add_warning(&mut self, diag: Diagnostic) {
+        self.warnings.push(diag)
     }
     /// Add an error
-    pub fn error(
-        &mut self,
-        summary: String,
-        detail: String,
-        attribute: AttributePath,
-    ) -> &mut Self {
+    pub fn error(&mut self, summary: String, detail: String, attribute: AttributePath) {
         self.add_error(Diagnostic::new(summary, detail, attribute))
     }
     /// Add an error without AttributePath
-    pub fn root_error(&mut self, summary: String, detail: String) -> &mut Self {
+    pub fn root_error(&mut self, summary: String, detail: String) {
         self.add_error(Diagnostic::root(summary, detail))
     }
     /// Add an error without details
-    pub fn error_short(&mut self, summary: String, attribute: AttributePath) -> &mut Self {
+    pub fn error_short(&mut self, summary: String, attribute: AttributePath) {
         self.add_error(Diagnostic::short(summary, attribute))
     }
     /// Add an error without AttributePath nor details
-    pub fn root_error_short(&mut self, summary: String) -> &mut Self {
+    pub fn root_error_short(&mut self, summary: String) {
         self.add_error(Diagnostic::root_short(summary))
     }
 
     /// Add a warning
-    pub fn warning(
-        &mut self,
-        summary: String,
-        detail: String,
-        attribute: AttributePath,
-    ) -> &mut Self {
+    pub fn warning(&mut self, summary: String, detail: String, attribute: AttributePath) {
         self.add_warning(Diagnostic::new(summary, detail, attribute))
     }
     /// Add a warning without AttributePath
-    pub fn root_warning(&mut self, summary: String, detail: String) -> &mut Self {
+    pub fn root_warning(&mut self, summary: String, detail: String) {
         self.add_warning(Diagnostic::root(summary, detail))
     }
     /// Add a warning without details
-    pub fn error_warning(&mut self, summary: String, attribute: AttributePath) -> &mut Self {
+    pub fn error_warning(&mut self, summary: String, attribute: AttributePath) {
         self.add_warning(Diagnostic::short(summary, attribute))
     }
     /// Add a warning without AttributePath nor details
-    pub fn root_warning_short(&mut self, summary: String) -> &mut Self {
+    pub fn root_warning_short(&mut self, summary: String) {
         self.add_warning(Diagnostic::root_short(summary))
     }
     /// Add
-    pub fn add_diagnostics(&mut self, mut diags: Diagnostics) -> &mut Self {
+    pub fn add_diagnostics(&mut self, mut diags: Diagnostics) {
         self.errors.append(&mut diags.errors);
         self.warnings.append(&mut diags.warnings);
-        self
     }
 }
 
