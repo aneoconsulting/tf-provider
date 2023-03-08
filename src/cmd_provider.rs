@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use async_trait::async_trait;
+
 use tf_provider::{
     schema::{Block, Description},
     EmptyValue, Provider, Schema,
@@ -10,6 +12,7 @@ use crate::cmd_resource::CmdResource;
 #[derive(Debug, Default)]
 pub struct CmdProvider {}
 
+#[async_trait]
 impl Provider for CmdProvider {
     type Config = EmptyValue;
     type MetaState = EmptyValue;
@@ -27,11 +30,15 @@ impl Provider for CmdProvider {
         })
     }
 
-    fn validate(&self, _diags: &mut tf_provider::Diagnostics, _config: Self::Config) -> Option<()> {
+    async fn validate(
+        &self,
+        _diags: &mut tf_provider::Diagnostics,
+        _config: Self::Config,
+    ) -> Option<()> {
         Some(())
     }
 
-    fn configure(
+    async fn configure(
         &self,
         _diags: &mut tf_provider::Diagnostics,
         _terraform_version: String,

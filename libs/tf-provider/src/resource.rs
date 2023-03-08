@@ -4,23 +4,25 @@ use crate::dynamic::DynamicValue;
 use crate::schema::Schema;
 use crate::utils::OptionFactor;
 
+use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 /// Trait for implementing a resource
+#[async_trait]
 pub trait Resource: Send + Sync {
     /// State of the resource
-    type State: Serialize + DeserializeOwned;
+    type State: Serialize + DeserializeOwned + Send;
     /// Private state of the resource
-    type PrivateState: Serialize + DeserializeOwned;
+    type PrivateState: Serialize + DeserializeOwned + Send;
     /// State of the provider metadata
-    type ProviderMetaState: Serialize + DeserializeOwned;
+    type ProviderMetaState: Serialize + DeserializeOwned + Send;
 
     /// Get the schema of the resource
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the resource
-    fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()>;
     /// Read the new state of the resource
-    fn read(
+    async fn read(
         &self,
         diags: &mut Diagnostics,
         state: Self::State,
@@ -28,7 +30,7 @@ pub trait Resource: Send + Sync {
         provider_meta_state: Self::ProviderMetaState,
     ) -> Option<(Self::State, Self::PrivateState)>;
     /// Plan the changes on the resource
-    fn plan(
+    async fn plan(
         &self,
         diags: &mut Diagnostics,
         prior_state: Self::State,
@@ -38,7 +40,7 @@ pub trait Resource: Send + Sync {
         provider_meta_state: Self::ProviderMetaState,
     ) -> Option<(Self::State, Self::PrivateState, Vec<AttributePath>)>;
     /// Apply the changes on the resource
-    fn apply(
+    async fn apply(
         &self,
         diags: &mut Diagnostics,
         prior_state: Self::State,
@@ -48,7 +50,7 @@ pub trait Resource: Send + Sync {
         provider_meta_state: Self::ProviderMetaState,
     ) -> Option<(Self::State, Self::PrivateState)>;
     /// Import an existing resource
-    fn import(
+    async fn import(
         &self,
         diags: &mut Diagnostics,
         id: String,
@@ -58,7 +60,7 @@ pub trait Resource: Send + Sync {
         None
     }
     /// Upgrade the resource
-    fn upgrade(
+    async fn upgrade(
         &self,
         diags: &mut Diagnostics,
         version: i64,
@@ -71,13 +73,14 @@ pub trait Resource: Send + Sync {
     }
 }
 
+#[async_trait]
 pub trait DynamicResource: Send + Sync {
     /// Get the schema of the resource
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the resource
-    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
     /// Read the new state of the resource
-    fn read(
+    async fn read(
         &self,
         diags: &mut Diagnostics,
         state: DynamicValue,
@@ -85,7 +88,7 @@ pub trait DynamicResource: Send + Sync {
         provider_meta_state: DynamicValue,
     ) -> Option<(DynamicValue, Vec<u8>)>;
     /// Plan the changes on the resource
-    fn plan(
+    async fn plan(
         &self,
         diags: &mut Diagnostics,
         prior_state: DynamicValue,
@@ -95,7 +98,7 @@ pub trait DynamicResource: Send + Sync {
         provider_meta_state: DynamicValue,
     ) -> Option<(DynamicValue, Vec<u8>, Vec<AttributePath>)>;
     /// Apply the changes on the resource
-    fn apply(
+    async fn apply(
         &self,
         diags: &mut Diagnostics,
         prior_state: DynamicValue,
@@ -105,13 +108,13 @@ pub trait DynamicResource: Send + Sync {
         provider_meta_state: DynamicValue,
     ) -> Option<(DynamicValue, Vec<u8>)>;
     /// Import an existing resource
-    fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(DynamicValue, Vec<u8>)> {
+    async fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(DynamicValue, Vec<u8>)> {
         _ = id;
         diags.root_error_short("Import is not supported");
         None
     }
     /// Upgrade the resource
-    fn upgrade(
+    async fn upgrade(
         &self,
         diags: &mut Diagnostics,
         version: i64,
@@ -124,18 +127,19 @@ pub trait DynamicResource: Send + Sync {
     }
 }
 
+#[async_trait]
 impl<T: Resource> DynamicResource for T {
     /// Get the schema of the resource
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
         <T as Resource>::schema(self, diags)
     }
     /// Validate the configuration of the resource
-    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
+    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
         let config = config.deserialize(diags)?;
-        <T as Resource>::validate(self, diags, config)
+        <T as Resource>::validate(self, diags, config).await
     }
     /// Read the new state of the resource
-    fn read(
+    async fn read(
         &self,
         diags: &mut Diagnostics,
         state: DynamicValue,
@@ -150,7 +154,7 @@ impl<T: Resource> DynamicResource for T {
             .factor()?;
 
         let (state, private_state) =
-            <T as Resource>::read(self, diags, state, private_state, provider_meta_state)?;
+            <T as Resource>::read(self, diags, state, private_state, provider_meta_state).await?;
 
         (
             DynamicValue::serialize(diags, &state),
@@ -159,7 +163,7 @@ impl<T: Resource> DynamicResource for T {
             .factor()
     }
     /// Plan the changes on the resource
-    fn plan(
+    async fn plan(
         &self,
         diags: &mut Diagnostics,
         prior_state: DynamicValue,
@@ -186,7 +190,8 @@ impl<T: Resource> DynamicResource for T {
             config_state,
             prior_private_state,
             provider_meta_state,
-        )?;
+        )
+        .await?;
 
         (
             DynamicValue::serialize(diags, &state),
@@ -196,7 +201,7 @@ impl<T: Resource> DynamicResource for T {
             .factor()
     }
     /// Apply the changes on the resource
-    fn apply(
+    async fn apply(
         &self,
         diags: &mut Diagnostics,
         prior_state: DynamicValue,
@@ -222,7 +227,8 @@ impl<T: Resource> DynamicResource for T {
             config_state,
             planned_private_state,
             provider_meta_state,
-        )?;
+        )
+        .await?;
         (
             DynamicValue::serialize(diags, &state),
             DynamicValue::serialize_vec(diags, &private_state),
@@ -230,8 +236,8 @@ impl<T: Resource> DynamicResource for T {
             .factor()
     }
     /// Import an existing resource
-    fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(DynamicValue, Vec<u8>)> {
-        let (state, private_state) = <T as Resource>::import(self, diags, id)?;
+    async fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(DynamicValue, Vec<u8>)> {
+        let (state, private_state) = <T as Resource>::import(self, diags, id).await?;
         (
             DynamicValue::serialize(diags, &state),
             DynamicValue::serialize_vec(diags, &private_state),
@@ -239,13 +245,13 @@ impl<T: Resource> DynamicResource for T {
             .factor()
     }
     /// Upgrade the resource
-    fn upgrade(
+    async fn upgrade(
         &self,
         diags: &mut Diagnostics,
         version: i64,
         prior_state: DynamicValue,
     ) -> Option<DynamicValue> {
-        let state = <T as Resource>::upgrade(self, diags, version, prior_state)?;
+        let state = <T as Resource>::upgrade(self, diags, version, prior_state).await?;
         DynamicValue::serialize(diags, &state)
     }
 }

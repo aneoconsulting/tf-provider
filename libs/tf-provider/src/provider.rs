@@ -7,23 +7,25 @@ use crate::resource::DynamicResource;
 use crate::schema::Block;
 use crate::schema::Schema;
 
+use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
 /// Trait for implementing a provider
+#[async_trait]
 pub trait Provider: Send + Sync + 'static {
     /// Configuration of the provider
-    type Config: Serialize + DeserializeOwned;
+    type Config: Serialize + DeserializeOwned + Send;
     /// State of the provider metadata
-    type MetaState: Serialize + DeserializeOwned;
+    type MetaState: Serialize + DeserializeOwned + Send;
 
     /// Get the schema of the provider
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
 
     /// Validate the configuration of the provider
-    fn validate(&self, diags: &mut Diagnostics, config: Self::Config) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: Self::Config) -> Option<()>;
 
     /// Configure the provider
-    fn configure(
+    async fn configure(
         &self,
         diags: &mut Diagnostics,
         terraform_version: String,
@@ -52,15 +54,16 @@ pub trait Provider: Send + Sync + 'static {
     ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>>;
 }
 
+#[async_trait]
 pub trait DynamicProvider: Send + Sync + 'static {
     /// Get the schema of the provider
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
 
     /// Validate the configuration of the provider
-    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
 
     /// Configure the provider
-    fn configure(
+    async fn configure(
         &self,
         diags: &mut Diagnostics,
         terraform_version: String,
@@ -89,6 +92,7 @@ pub trait DynamicProvider: Send + Sync + 'static {
     ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>>;
 }
 
+#[async_trait]
 impl<T: Provider> DynamicProvider for T {
     /// Get the schema of the provider
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
@@ -96,20 +100,20 @@ impl<T: Provider> DynamicProvider for T {
     }
 
     /// Validate the configuration of the provider
-    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
+    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
         let config = config.deserialize(diags)?;
-        <T as Provider>::validate(self, diags, config)
+        <T as Provider>::validate(self, diags, config).await
     }
 
     /// Configure the provider
-    fn configure(
+    async fn configure(
         &self,
         diags: &mut Diagnostics,
         terraform_version: String,
         config: DynamicValue,
     ) -> Option<()> {
         let config = config.deserialize(diags)?;
-        <T as Provider>::configure(self, diags, terraform_version, config)
+        <T as Provider>::configure(self, diags, terraform_version, config).await
     }
 
     /// Get the schema for the provider metadata (defaults to empty)

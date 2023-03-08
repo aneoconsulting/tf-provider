@@ -3,21 +3,23 @@ use crate::dynamic::DynamicValue;
 use crate::schema::Schema;
 use crate::utils::OptionFactor;
 
+use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
+#[async_trait]
 /// Trait for implementing a data source
 pub trait DataSource: Send + Sync {
     /// State of the data source
-    type State: Serialize + DeserializeOwned;
+    type State: Serialize + DeserializeOwned + Send;
     /// State of the provider metadata
-    type ProviderMetaState: Serialize + DeserializeOwned;
+    type ProviderMetaState: Serialize + DeserializeOwned + Send;
 
     /// Get the schema of the data source
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the data source
-    fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()>;
     /// Read the new state of the data source
-    fn read(
+    async fn read(
         &self,
         diags: &mut Diagnostics,
         config: Self::State,
@@ -25,13 +27,14 @@ pub trait DataSource: Send + Sync {
     ) -> Option<Self::State>;
 }
 
+#[async_trait]
 pub trait DynamicDataSource: Send + Sync {
     /// Get the schema of the data source
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the data source
-    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
     /// Read the new state of the data source
-    fn read(
+    async fn read(
         &self,
         diags: &mut Diagnostics,
         config: DynamicValue,
@@ -39,15 +42,16 @@ pub trait DynamicDataSource: Send + Sync {
     ) -> Option<DynamicValue>;
 }
 
+#[async_trait]
 impl<T: DataSource> DynamicDataSource for T {
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
         <T as DataSource>::schema(self, diags)
     }
-    fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
+    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
         let config = config.deserialize(diags)?;
-        <T as DataSource>::validate(self, diags, config)
+        <T as DataSource>::validate(self, diags, config).await
     }
-    fn read(
+    async fn read(
         &self,
         diags: &mut Diagnostics,
         config: DynamicValue,
@@ -58,7 +62,7 @@ impl<T: DataSource> DynamicDataSource for T {
             provider_meta_state.deserialize(diags),
         )
             .factor()?;
-        let state = <T as DataSource>::read(self, diags, config, provider_meta_state)?;
+        let state = <T as DataSource>::read(self, diags, config, provider_meta_state).await?;
         DynamicValue::serialize(diags, &state)
     }
 }

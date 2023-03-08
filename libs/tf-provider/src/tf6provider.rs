@@ -4,7 +4,8 @@ use crate::diagnostics::Diagnostics;
 use crate::dynamic::DynamicValue;
 use crate::server::Server;
 use crate::tfplugin6 as tf;
-use crate::utils::{CollectDiagnostics, MapInto, OptionExpand, OptionFactor};
+use crate::tfplugin6::get_provider_schema::ServerCapabilities;
+use crate::utils::{CollectDiagnostics, MapInto, OptionExpand};
 
 #[tonic::async_trait]
 impl tf::provider_server::Provider for Arc<Server> {
@@ -31,7 +32,7 @@ impl tf::provider_server::Provider for Arc<Server> {
             data_source_schemas: data_sources,
             diagnostics: self.init_diags.clone().into(),
             provider_meta: meta_schema,
-            server_capabilities: None,
+            server_capabilities: Some(ServerCapabilities { plan_destroy: true }),
         }))
     }
     async fn validate_provider_config(
@@ -41,13 +42,12 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        if request
-            .config
-            .and_then(|config| self.provider.validate(&mut diags, config.into()))
-            .is_none()
-        {
-            diags.internal_error();
+        _ = if let Some(config) = request.config {
+            self.provider.validate(&mut diags, config.into()).await
+        } else {
+            None
         }
+        .ok_or_else(|| diags.internal_error());
 
         Ok(tonic::Response::new(
             tf::validate_provider_config::Response {
@@ -62,16 +62,15 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        if (
+        _ = if let (Some(resource), Some(config)) = (
             self.get_resource(&mut diags, &request.type_name),
             request.config,
-        )
-            .factor()
-            .and_then(|(resource, config)| resource.validate(&mut diags, config.into()))
-            .is_none()
-        {
-            diags.internal_error();
+        ) {
+            resource.validate(&mut diags, config.into()).await
+        } else {
+            None
         }
+        .ok_or_else(|| diags.internal_error());
 
         Ok(tonic::Response::new(
             tf::validate_resource_config::Response {
@@ -86,16 +85,15 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        if (
+        _ = if let (Some(data_source), Some(config)) = (
             self.get_data_source(&mut diags, &request.type_name),
             request.config,
-        )
-            .factor()
-            .and_then(|(data_source, config)| data_source.validate(&mut diags, config.into()))
-            .is_none()
-        {
-            diags.internal_error();
+        ) {
+            data_source.validate(&mut diags, config.into()).await
+        } else {
+            None
         }
+        .ok_or_else(|| diags.internal_error());
 
         Ok(tonic::Response::new(
             tf::validate_data_resource_config::Response {
@@ -110,27 +108,24 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        let upgraded_state = (
-            self.resources
-                .get(&request.type_name)
-                .collect_diagnostics(&mut diags),
-            request.raw_state,
-        )
-            .factor()
-            .and_then(|((resource, schema), raw_state)| {
-                if raw_state.json.is_empty() {
-                    diags.root_error_short("Upgrading from a legacy state is not supported");
-                    None
+        let upgraded_state = if let (Some((resource, schema)), Some(raw_state)) =
+            (self.resources.get(&request.type_name), request.raw_state)
+        {
+            if raw_state.json.is_empty() {
+                diags.root_error_short("Upgrading from a legacy state is not supported");
+                None
+            } else {
+                let json = DynamicValue::Json(raw_state.json);
+                if request.version == schema.version {
+                    Some(json)
                 } else {
-                    let json = DynamicValue::Json(raw_state.json);
-                    if request.version == schema.version {
-                        Some(json)
-                    } else {
-                        resource.upgrade(&mut diags, request.version, json)
-                    }
+                    resource.upgrade(&mut diags, request.version, json).await
                 }
-            })
-            .collect_diagnostics(&mut diags);
+            }
+        } else {
+            None
+        }
+        .collect_diagnostics(&mut diags);
 
         Ok(tonic::Response::new(tf::upgrade_resource_state::Response {
             diagnostics: diags.into(),
@@ -145,15 +140,15 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        if request
-            .config
-            .and_then(|config| {
-                self.provider
-                    .configure(&mut diags, request.terraform_version, config.into())
-            })
-            .is_none()
-        {
-            diags.internal_error();
+        if let Some(config) = request.config {
+            if self
+                .provider
+                .configure(&mut diags, request.terraform_version, config.into())
+                .await
+                .is_none()
+            {
+                diags.internal_error();
+            }
         }
 
         Ok(tonic::Response::new(tf::configure_provider::Response {
@@ -168,20 +163,23 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        let (state, private_state) = (
-            self.get_resource(&mut diags, &request.type_name),
-            request.current_state,
-            request.provider_meta,
-        )
-            .factor()
-            .and_then(|(resource, state, provider_meta_state)| {
-                resource.read(
-                    &mut diags,
-                    state.into(),
-                    request.private,
-                    provider_meta_state.into(),
-                )
-            })
+        let (state, private_state) =
+            if let (Some(resource), Some(state), Some(provider_meta_state)) = (
+                self.get_resource(&mut diags, &request.type_name),
+                request.current_state,
+                request.provider_meta,
+            ) {
+                resource
+                    .read(
+                        &mut diags,
+                        state.into(),
+                        request.private,
+                        provider_meta_state.into(),
+                    )
+                    .await
+            } else {
+                None
+            }
             .collect_diagnostics(&mut diags)
             .expand();
 
@@ -198,35 +196,41 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        let (state, private_state, triggers) = (
+        let (state, private_state, triggers) = if let (
+            Some(resource),
+            Some(prior_state),
+            Some(proposed_state),
+            Some(config_state),
+            Some(provider_meta_state),
+        ) = (
             self.get_resource(&mut diags, &request.type_name),
             request.prior_state,
             request.proposed_new_state,
             request.config,
             request.provider_meta,
-        )
-            .factor()
-            .and_then(
-                |(resource, prior_state, proposed_state, config_state, provider_meta_state)| {
-                    resource.plan(
-                        &mut diags,
-                        prior_state.into(),
-                        proposed_state.into(),
-                        config_state.into(),
-                        request.prior_private,
-                        provider_meta_state.into(),
-                    )
-                },
-            )
-            .map(|(state, private_state, triggers)| {
-                (
-                    state.into(),
-                    private_state,
-                    triggers.into_iter().map(|attr| attr.into()).collect(),
+        ) {
+            resource
+                .plan(
+                    &mut diags,
+                    prior_state.into(),
+                    proposed_state.into(),
+                    config_state.into(),
+                    request.prior_private,
+                    provider_meta_state.into(),
                 )
-            })
-            .collect_diagnostics(&mut diags)
-            .expand();
+                .await
+        } else {
+            None
+        }
+        .map(|(state, private_state, triggers)| {
+            (
+                state.into(),
+                private_state,
+                triggers.into_iter().map(|attr| attr.into()).collect(),
+            )
+        })
+        .collect_diagnostics(&mut diags)
+        .expand();
 
         Ok(tonic::Response::new(tf::plan_resource_change::Response {
             planned_state: state,
@@ -243,28 +247,34 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        let (state, private_state) = (
+        let (state, private_state) = if let (
+            Some(resource),
+            Some(prior_state),
+            Some(planned_state),
+            Some(config_state),
+            Some(provider_meta_state),
+        ) = (
             self.get_resource(&mut diags, &request.type_name),
             request.prior_state,
             request.planned_state,
             request.config,
             request.provider_meta,
-        )
-            .factor()
-            .and_then(
-                |(resource, prior_state, planned_state, config_state, provider_meta_state)| {
-                    resource.apply(
-                        &mut diags,
-                        prior_state.into(),
-                        planned_state.into(),
-                        config_state.into(),
-                        request.planned_private,
-                        provider_meta_state.into(),
-                    )
-                },
-            )
-            .collect_diagnostics(&mut diags)
-            .expand();
+        ) {
+            resource
+                .apply(
+                    &mut diags,
+                    prior_state.into(),
+                    planned_state.into(),
+                    config_state.into(),
+                    request.planned_private,
+                    provider_meta_state.into(),
+                )
+                .await
+        } else {
+            None
+        }
+        .collect_diagnostics(&mut diags)
+        .expand();
 
         Ok(tonic::Response::new(tf::apply_resource_change::Response {
             new_state: state.map_into(),
@@ -279,17 +289,21 @@ impl tf::provider_server::Provider for Arc<Server> {
     ) -> Result<tonic::Response<tf::import_resource_state::Response>, tonic::Status> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
-        let imported = self
-            .get_resource(&mut diags, &request.type_name)
-            .and_then(|resource| resource.import(&mut diags, request.id))
-            .collect_diagnostics(&mut diags)
-            .map(
-                |(state, private_state)| tf::import_resource_state::ImportedResource {
-                    type_name: request.type_name,
-                    state: Some(state.into()),
-                    private: private_state,
-                },
-            );
+
+        let imported = if let Some(resource) = self.get_resource(&mut diags, &request.type_name) {
+            resource.import(&mut diags, request.id).await
+        } else {
+            None
+        }
+        .collect_diagnostics(&mut diags)
+        .map(
+            |(state, private_state)| tf::import_resource_state::ImportedResource {
+                type_name: request.type_name,
+                state: Some(state.into()),
+                private: private_state,
+            },
+        );
+
         Ok(tonic::Response::new(tf::import_resource_state::Response {
             imported_resources: imported.into_iter().collect(),
             diagnostics: diags.into(),
@@ -302,16 +316,18 @@ impl tf::provider_server::Provider for Arc<Server> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
 
-        let state = (
+        let state = if let (Some(data_source), Some(config), Some(provider_meta_state)) = (
             self.get_data_source(&mut diags, &request.type_name),
             request.config,
             request.provider_meta,
-        )
-            .factor()
-            .and_then(|(data_source, config, provider_meta_state)| {
-                data_source.read(&mut diags, config.into(), provider_meta_state.into())
-            })
-            .collect_diagnostics(&mut diags);
+        ) {
+            data_source
+                .read(&mut diags, config.into(), provider_meta_state.into())
+                .await
+        } else {
+            None
+        }
+        .collect_diagnostics(&mut diags);
 
         Ok(tonic::Response::new(tf::read_data_source::Response {
             state: state.map_into(),
