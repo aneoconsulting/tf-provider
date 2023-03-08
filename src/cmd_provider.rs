@@ -1,11 +1,8 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
 use tf_provider::{
-    resource::DynamicResource,
     schema::{Block, Description},
-    value::Value,
-    Provider, Schema,
+    EmptyValue, Provider, Schema,
 };
 
 use crate::cmd_resource::CmdResource;
@@ -13,16 +10,9 @@ use crate::cmd_resource::CmdResource;
 #[derive(Debug, Default)]
 pub struct CmdProvider {}
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProviderConfig {}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProviderMeta {}
-
 impl Provider for CmdProvider {
-    type Config = Value<ProviderConfig>;
-
-    type MetaState = Value<ProviderMeta>;
+    type Config = EmptyValue;
+    type MetaState = EmptyValue;
 
     fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<tf_provider::Schema> {
         Some(Schema {
@@ -55,8 +45,8 @@ impl Provider for CmdProvider {
         _diags: &mut tf_provider::Diagnostics,
     ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::resource::DynamicResource>>>
     {
-        let mut resources = HashMap::<String, Box<dyn DynamicResource>>::default();
-        resources.insert("cmd_test".into(), Box::new(CmdResource {}));
+        let mut resources = HashMap::default();
+        resources.insert("test".into(), Box::new(CmdResource {}) as _);
         Some(resources)
     }
 

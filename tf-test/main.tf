@@ -11,5 +11,6 @@ provider "cmd" {
 }
 
 resource "cmd_test" "test" {
-  //read "pouet" {}
+  dummy = 3
+  read "pouet" {}
 }

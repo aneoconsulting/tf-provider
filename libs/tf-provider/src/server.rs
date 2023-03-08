@@ -44,7 +44,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(provider: Box<dyn DynamicProvider>) -> Arc<Self> {
+    pub fn new(provider_name: String, provider: Box<dyn DynamicProvider>) -> Self {
         let mut diags = Default::default();
         let mut has_errors = false;
         let mut set_error = || {
@@ -59,7 +59,7 @@ impl Server {
             .into_iter()
             .filter_map(|(name, resource)| {
                 let schema = resource.schema(&mut diags).or_else(&mut set_error)?;
-                Some((name, (resource, schema)))
+                Some((format!("{}_{}", provider_name, name), (resource, schema)))
             })
             .collect();
         let data_sources = provider
@@ -68,7 +68,7 @@ impl Server {
             .into_iter()
             .filter_map(|(name, data_source)| {
                 let schema = data_source.schema(&mut diags).or_else(&mut set_error)?;
-                Some((name, (data_source, schema)))
+                Some((format!("{}_{}", provider_name, name), (data_source, schema)))
             })
             .collect();
 
@@ -76,7 +76,7 @@ impl Server {
             diags.internal_error()
         }
 
-        Arc::new(Self {
+        Self {
             provider,
             io: Default::default(),
             cancellation_token: Default::default(),
@@ -85,47 +85,7 @@ impl Server {
             meta_schema,
             resources,
             data_sources,
-        })
-    }
-
-    pub async fn serve(server: Arc<Self>) -> Result<()> {
-        let log_file = File::create("cmd-trace.log")?;
-        let addrs = SockAddrIter::new()?;
-        let (tcp_stream, endpoint) = listen(addrs)?;
-
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .with_ansi(false)
-            .with_writer(Mutex::new(log_file))
-            .init();
-
-        let tls_config = TlsConfig::new()?;
-
-        let serve = tls_config
-            .builder()?
-            .layer(TraceLayer::new_for_grpc())
-            .add_service(GrpcBrokerServer::new(server.clone()))
-            .add_service(GrpcControllerServer::new(server.clone()))
-            .add_service(GrpcStdioServer::new(server.clone()))
-            .add_service(ProviderServer::new(server.clone()))
-            .serve_with_incoming_shutdown(tcp_stream, server.cancellation_token.cancelled());
-
-        async fn info(endpoint: &str, der: &[u8]) -> Result<()> {
-            println!(
-                "{}|6|tcp|{}|grpc|{}",
-                CORE_PROTOCOL_VERSION,
-                endpoint,
-                base64::encode_config(der, base64::STANDARD_NO_PAD)
-            );
-            Ok(())
         }
-
-        try_join!(
-            serve.map_err(|e| anyhow!(e)),
-            info(&endpoint, tls_config.cert.as_slice()),
-        )?;
-
-        Ok(())
     }
 
     pub(crate) fn get_resource<'a>(
@@ -152,6 +112,51 @@ impl Server {
             None
         }
     }
+}
+
+pub async fn serve<U: ToString, V: DynamicProvider>(name: U, provider: V) -> Result<()> {
+    serve_dynamic(name.to_string(), Box::new(provider)).await
+}
+
+pub async fn serve_dynamic(name: String, provider: Box<dyn DynamicProvider>) -> Result<()> {
+    let server = Arc::new(Server::new(name, provider));
+    let log_file = File::create("cmd-trace.log")?;
+    let addrs = SockAddrIter::new()?;
+    let (tcp_stream, endpoint) = listen(addrs)?;
+
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .with_ansi(false)
+        .with_writer(Mutex::new(log_file))
+        .init();
+
+    let tls_config = TlsConfig::new()?;
+
+    let serve = tls_config
+        .builder()?
+        .layer(TraceLayer::new_for_grpc())
+        .add_service(GrpcBrokerServer::new(server.clone()))
+        .add_service(GrpcControllerServer::new(server.clone()))
+        .add_service(GrpcStdioServer::new(server.clone()))
+        .add_service(ProviderServer::new(server.clone()))
+        .serve_with_incoming_shutdown(tcp_stream, server.cancellation_token.cancelled());
+
+    async fn info(endpoint: &str, der: &[u8]) -> Result<()> {
+        println!(
+            "{}|6|tcp|{}|grpc|{}",
+            CORE_PROTOCOL_VERSION,
+            endpoint,
+            base64::encode_config(der, base64::STANDARD_NO_PAD)
+        );
+        Ok(())
+    }
+
+    try_join!(
+        serve.map_err(|e| anyhow!(e)),
+        info(&endpoint, tls_config.cert.as_slice()),
+    )?;
+
+    Ok(())
 }
 
 struct CertVerifier {

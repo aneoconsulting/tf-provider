@@ -18,8 +18,10 @@ pub trait Provider: Send + Sync + 'static {
 
     /// Get the schema of the provider
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
+
     /// Validate the configuration of the provider
     fn validate(&self, diags: &mut Diagnostics, config: Self::Config) -> Option<()>;
+
     /// Configure the provider
     fn configure(
         &self,
@@ -31,11 +33,10 @@ pub trait Provider: Send + Sync + 'static {
     /// Get the schema for the provider metadata (defaults to empty)
     fn meta_schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
         _ = diags;
-        Schema {
+        Some(Schema {
             version: 1,
             block: Block::empty(),
-        }
-        .into()
+        })
     }
 
     /// Get the resources of the provider
@@ -54,8 +55,10 @@ pub trait Provider: Send + Sync + 'static {
 pub trait DynamicProvider: Send + Sync + 'static {
     /// Get the schema of the provider
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
+
     /// Validate the configuration of the provider
     fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
+
     /// Configure the provider
     fn configure(
         &self,
@@ -91,11 +94,13 @@ impl<T: Provider> DynamicProvider for T {
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
         <T as Provider>::schema(self, diags)
     }
+
     /// Validate the configuration of the provider
     fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
         let config = config.deserialize(diags)?;
         <T as Provider>::validate(self, diags, config)
     }
+
     /// Configure the provider
     fn configure(
         &self,

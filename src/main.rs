@@ -7,5 +7,5 @@ mod cmd_resource;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    serve(CmdProvider::default()).await
+    serve("cmd", CmdProvider::default()).await
 }

@@ -19,6 +19,13 @@ pub enum Value<T> {
     Unknown,
 }
 
+#[derive(
+    Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Default, Serialize, Deserialize,
+)]
+pub struct EmptyStruct {}
+
+pub type EmptyValue = Value<EmptyStruct>;
+
 impl<T> Value<T> {
     /////////////////////////////////////////////////////////////////////////
     // Querying the contained values

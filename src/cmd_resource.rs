@@ -3,23 +3,21 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tf_provider::{
     schema::{Attribute, AttributeConstraint, Block, Description, NestedBlock},
-    Resource, Schema, Value,
+    EmptyValue, Resource, Schema, Value,
 };
 
 pub struct CmdResource {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct State {
-    pub dummy: i64,
-    pub read: HashMap<String, Value<()>>,
+    pub dummy: Value<i64>,
+    pub read: HashMap<String, EmptyValue>,
 }
 
 impl Resource for CmdResource {
     type State = Value<State>;
-
-    type PrivateState = Value<()>;
-
-    type ProviderMetaState = Value<crate::cmd_provider::ProviderMeta>;
+    type PrivateState = EmptyValue;
+    type ProviderMetaState = EmptyValue;
 
     fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<Schema> {
         Some(Schema {
