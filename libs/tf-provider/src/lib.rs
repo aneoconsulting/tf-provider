@@ -6,6 +6,7 @@ pub mod plugin;
 pub mod provider;
 pub mod resource;
 pub mod schema;
+pub mod server;
 pub mod tf6provider;
 pub mod value;
 
@@ -20,3 +21,4 @@ pub use diagnostics::Diagnostics;
 pub use provider::Provider;
 pub use resource::Resource;
 pub use schema::Schema;
+pub use server::Server;

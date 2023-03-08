@@ -1,21 +1,16 @@
-use std::fmt::Write;
 use std::pin::Pin;
+use std::{fmt::Write, sync::Arc};
 
 use futures::{Stream, StreamExt};
 use tokio::sync::broadcast;
-use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
+
+use crate::server::Server;
 
 tonic::include_proto!("plugin");
 
-#[derive(Debug)]
-pub struct GrpcBroker {
-    pub io: GrpcIo,
-    pub cancellation_token: CancellationToken,
-}
-
 #[tonic::async_trait]
-impl grpc_broker_server::GrpcBroker for GrpcBroker {
+impl grpc_broker_server::GrpcBroker for Arc<Server> {
     type StartStreamStream = Pin<Box<dyn Stream<Item = Result<ConnInfo, Status>> + Send + 'static>>;
     async fn start_stream(
         &self,
@@ -56,14 +51,8 @@ impl core::fmt::Display for ConnInfo {
     }
 }
 
-#[derive(Debug)]
-pub struct GrpcController {
-    pub io: GrpcIo,
-    pub cancellation_token: CancellationToken,
-}
-
 #[tonic::async_trait]
-impl grpc_controller_server::GrpcController for GrpcController {
+impl grpc_controller_server::GrpcController for Arc<Server> {
     async fn shutdown(
         &self,
         _request: tonic::Request<Empty>,
@@ -74,21 +63,15 @@ impl grpc_controller_server::GrpcController for GrpcController {
     }
 }
 
-#[derive(Debug)]
-pub struct GrpcStdio {
-    pub tx: broadcast::Sender<StdioData>,
-    pub cancellation_token: CancellationToken,
-}
-
 #[tonic::async_trait]
-impl grpc_stdio_server::GrpcStdio for GrpcStdio {
+impl grpc_stdio_server::GrpcStdio for Arc<Server> {
     type StreamStdioStream =
         Pin<Box<dyn Stream<Item = Result<StdioData, Status>> + Send + 'static>>;
     async fn stream_stdio(
         &self,
         _request: tonic::Request<()>,
     ) -> Result<tonic::Response<Self::StreamStdioStream>, tonic::Status> {
-        let mut rx = self.tx.subscribe();
+        let mut rx = self.io.tx.subscribe();
         let token = self.cancellation_token.clone();
 
         let output = async_stream::try_stream! {
@@ -135,16 +118,26 @@ pub struct GrpcIo {
 }
 
 impl GrpcIo {
-    fn stdout(&self) -> GrpcIoStream {
+    pub fn new(capacity: usize) -> Self {
+        let (tx, _) = broadcast::channel(capacity);
+        Self { tx }
+    }
+    pub fn stdout(&self) -> GrpcIoStream {
         GrpcIoStream {
             tx: &self.tx,
             channel: 1,
         }
     }
-    fn stderr(&self) -> GrpcIoStream {
+    pub fn stderr(&self) -> GrpcIoStream {
         GrpcIoStream {
             tx: &self.tx,
             channel: 2,
         }
+    }
+}
+
+impl Default for GrpcIo {
+    fn default() -> Self {
+        Self::new(10)
     }
 }

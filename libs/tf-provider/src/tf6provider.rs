@@ -1,57 +1,33 @@
-use crate::data_source::DynamicDataSource;
+use std::sync::Arc;
+
 use crate::diagnostics::Diagnostics;
 use crate::dynamic::DynamicValue;
-use crate::provider::DynamicProvider;
-use crate::resource::DynamicResource;
+use crate::server::Server;
 use crate::tfplugin6 as tf;
-use crate::utils::{MapInto, NormalizeDiagnostics, OptionExpand, OptionFactor};
-
-fn get_resource<'a>(
-    provider: &'a dyn DynamicProvider,
-    diags: &mut Diagnostics,
-    name: &str,
-) -> Option<&'a dyn DynamicResource> {
-    if let Some(resource) = provider.get_resources(diags)?.get(name) {
-        Some(resource.as_ref())
-    } else {
-        diags.root_error_short(format!("Could not find resource `{}` in provider", name));
-        None
-    }
-}
-fn get_data_source<'a>(
-    provider: &'a dyn DynamicProvider,
-    diags: &mut Diagnostics,
-    name: &str,
-) -> Option<&'a dyn DynamicDataSource> {
-    if let Some(data_source) = provider.get_data_sources(diags)?.get(name) {
-        Some(data_source.as_ref())
-    } else {
-        diags.root_error_short(format!("Could not find data source `{}` in provider", name));
-        None
-    }
-}
+use crate::utils::{ExtractDiagnostics, MapInto, OptionExpand, OptionFactor};
 
 #[tonic::async_trait]
-impl<T: DynamicProvider> tf::provider_server::Provider for T {
+impl tf::provider_server::Provider for Arc<Server> {
     async fn get_provider_schema(
         &self,
         _request: tonic::Request<tf::get_provider_schema::Request>,
     ) -> Result<tonic::Response<tf::get_provider_schema::Response>, tonic::Status> {
         let mut diags = Diagnostics::default();
         let mut has_errors = true;
-        let schema = if let Some(schema) = self.schema(&mut diags) {
+        let schema = if let Some(schema) = self.provider.schema(&mut diags) {
             Some(schema.into())
         } else {
             has_errors = true;
             None
         };
-        let meta_schema = if let Some(meta_schema) = self.meta_schema(&mut diags) {
+        let meta_schema = if let Some(meta_schema) = self.provider.meta_schema(&mut diags) {
             Some(meta_schema.into())
         } else {
             has_errors = true;
             None
         };
         let resources = self
+            .provider
             .get_resources(&mut diags)
             .map(|resources| {
                 resources
@@ -68,6 +44,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
             })
             .unwrap_or_default();
         let data_sources = self
+            .provider
             .get_data_sources(&mut diags)
             .map(|data_sources| {
                 data_sources
@@ -106,7 +83,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
 
         if request
             .config
-            .and_then(|config| self.validate(&mut diags, config.into()))
+            .and_then(|config| self.provider.validate(&mut diags, config.into()))
             .is_none()
         {
             diags.internal_error();
@@ -126,7 +103,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
         let mut diags = Diagnostics::default();
 
         if (
-            get_resource(self, &mut diags, &request.type_name),
+            self.get_resource(&mut diags, &request.type_name),
             request.config,
         )
             .factor()
@@ -150,7 +127,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
         let mut diags = Diagnostics::default();
 
         if (
-            get_data_source(self, &mut diags, &request.type_name),
+            self.get_data_source(&mut diags, &request.type_name),
             request.config,
         )
             .factor()
@@ -174,7 +151,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
         let mut diags = Diagnostics::default();
 
         let upgraded_state = (
-            get_resource(self, &mut diags, &request.type_name),
+            self.get_resource(&mut diags, &request.type_name),
             request.raw_state,
         )
             .factor()
@@ -190,7 +167,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
                     )
                 }
             })
-            .normalize_diagnostics(&mut diags);
+            .extract_diagnostics(&mut diags);
 
         Ok(tonic::Response::new(tf::upgrade_resource_state::Response {
             diagnostics: diags.into(),
@@ -207,7 +184,10 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
 
         if request
             .config
-            .and_then(|config| self.configure(&mut diags, request.terraform_version, config.into()))
+            .and_then(|config| {
+                self.provider
+                    .configure(&mut diags, request.terraform_version, config.into())
+            })
             .is_none()
         {
             diags.internal_error();
@@ -226,7 +206,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
         let mut diags = Diagnostics::default();
 
         let (state, private_state) = (
-            get_resource(self, &mut diags, &request.type_name),
+            self.get_resource(&mut diags, &request.type_name),
             request.current_state,
             request.provider_meta,
         )
@@ -239,7 +219,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
                     provider_meta_state.into(),
                 )
             })
-            .normalize_diagnostics(&mut diags)
+            .extract_diagnostics(&mut diags)
             .expand();
 
         Ok(tonic::Response::new(tf::read_resource::Response {
@@ -256,7 +236,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
         let mut diags = Diagnostics::default();
 
         let (state, private_state, triggers) = (
-            get_resource(self, &mut diags, &request.type_name),
+            self.get_resource(&mut diags, &request.type_name),
             request.prior_state,
             request.proposed_new_state,
             request.config,
@@ -282,7 +262,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
                     triggers.into_iter().map(|attr| attr.into()).collect(),
                 )
             })
-            .normalize_diagnostics(&mut diags)
+            .extract_diagnostics(&mut diags)
             .expand();
 
         Ok(tonic::Response::new(tf::plan_resource_change::Response {
@@ -301,7 +281,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
         let mut diags = Diagnostics::default();
 
         let (state, private_state) = (
-            get_resource(self, &mut diags, &request.type_name),
+            self.get_resource(&mut diags, &request.type_name),
             request.prior_state,
             request.planned_state,
             request.config,
@@ -320,7 +300,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
                     )
                 },
             )
-            .normalize_diagnostics(&mut diags)
+            .extract_diagnostics(&mut diags)
             .expand();
 
         Ok(tonic::Response::new(tf::apply_resource_change::Response {
@@ -336,9 +316,10 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
     ) -> Result<tonic::Response<tf::import_resource_state::Response>, tonic::Status> {
         let request = request.into_inner();
         let mut diags = Diagnostics::default();
-        let imported = get_resource(self, &mut diags, &request.type_name)
+        let imported = self
+            .get_resource(&mut diags, &request.type_name)
             .and_then(|resource| resource.import(&mut diags, request.id))
-            .normalize_diagnostics(&mut diags)
+            .extract_diagnostics(&mut diags)
             .map(
                 |(state, private_state)| tf::import_resource_state::ImportedResource {
                     type_name: request.type_name,
@@ -359,7 +340,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
         let mut diags = Diagnostics::default();
 
         let state = (
-            get_data_source(self, &mut diags, &request.type_name),
+            self.get_data_source(&mut diags, &request.type_name),
             request.config,
             request.provider_meta,
         )
@@ -367,7 +348,7 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
             .and_then(|(data_source, config, provider_meta_state)| {
                 data_source.read(&mut diags, config.into(), provider_meta_state.into())
             })
-            .normalize_diagnostics(&mut diags);
+            .extract_diagnostics(&mut diags);
 
         Ok(tonic::Response::new(tf::read_data_source::Response {
             state: state.map_into(),
@@ -379,6 +360,10 @@ impl<T: DynamicProvider> tf::provider_server::Provider for T {
         &self,
         _request: tonic::Request<tf::stop_provider::Request>,
     ) -> Result<tonic::Response<tf::stop_provider::Response>, tonic::Status> {
-        unimplemented!();
+        self.cancellation_token.cancel();
+
+        Ok(tonic::Response::new(tf::stop_provider::Response {
+            error: "".to_string(),
+        }))
     }
 }

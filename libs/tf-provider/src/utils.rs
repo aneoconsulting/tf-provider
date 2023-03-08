@@ -28,12 +28,14 @@ where
     }
 }
 
-pub trait NormalizeDiagnostics {
-    fn normalize_diagnostics(self, diags: &mut Diagnostics) -> Self;
+pub trait ExtractDiagnostics {
+    type Output;
+    fn extract_diagnostics(self, diags: &mut Diagnostics) -> Self::Output;
 }
 
-impl<T> NormalizeDiagnostics for Option<T> {
-    fn normalize_diagnostics(self, diags: &mut Diagnostics) -> Self {
+impl<T> ExtractDiagnostics for Option<T> {
+    type Output = Self;
+    fn extract_diagnostics(self, diags: &mut Diagnostics) -> Self::Output {
         if self.is_none() {
             diags.internal_error();
         }
@@ -41,14 +43,55 @@ impl<T> NormalizeDiagnostics for Option<T> {
     }
 }
 
+impl<T, E> ExtractDiagnostics for Result<T, E>
+where
+    E: ToString,
+{
+    type Output = Option<T>;
+    fn extract_diagnostics(self, diags: &mut Diagnostics) -> Self::Output {
+        match self {
+            Ok(value) => Some(value),
+            Err(err) => {
+                diags.root_error_short(err);
+                None
+            }
+        }
+    }
+}
+
+macro_rules! count{
+    () => (0usize);
+    ( $x:tt $($xs:tt)* ) => (1usize + count!($($xs)*))
+}
 macro_rules! impl_all {
-    ($($e:ident)+) => {
+    ($($e:ident)+) => {impl_all!(count!($($e)+); $($e)+);};
+    ($n:expr; $($e:ident)+) => {
+
+        impl<T> OptionFactor for [Option<T>; $n] {
+            type Output = Option<[T; $n]>;
+            #[allow(non_snake_case)]
+            fn factor(self) -> Self::Output {
+                let [$($e,)+] = self;
+                Some([$($e?,)+])
+            }
+        }
         impl<$($e),+> OptionFactor for ($(Option<$e>,)+) {
             type Output = Option<($($e,)+)>;
             #[allow(non_snake_case)]
             fn factor(self) -> Self::Output {
                 let ($($e,)+) = self;
                 Some(($($e?,)+))
+            }
+        }
+        impl<T> OptionExpand for Option<[T; $n]> {
+            type Output = [Option<T>; $n];
+            #[allow(non_snake_case)]
+            fn expand(self) -> Self::Output {
+                if let Some([$($e,)+]) = self {
+                    [$(Some($e),)+]
+                } else {
+                    Default::default()
+                }
             }
         }
         impl<$($e),+> OptionExpand for Option<($($e,)+)> {
@@ -58,7 +101,7 @@ macro_rules! impl_all {
                 if let Some(($($e,)+)) = self {
                     ($(Some($e),)+)
                 } else {
-                    ($(Option::<$e>::None,)+)
+                    Default::default()
                 }
             }
         }
