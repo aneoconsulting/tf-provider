@@ -28,31 +28,31 @@ where
     }
 }
 
-pub trait ExtractDiagnostics {
+pub trait CollectDiagnostics {
     type Output;
-    fn extract_diagnostics(self, diags: &mut Diagnostics) -> Self::Output;
+    fn collect_diagnostics(self, diags: &mut Diagnostics) -> Self::Output;
 }
 
-impl<T> ExtractDiagnostics for Option<T> {
+impl<T> CollectDiagnostics for Option<T> {
     type Output = Self;
-    fn extract_diagnostics(self, diags: &mut Diagnostics) -> Self::Output {
-        if self.is_none() {
-            diags.internal_error();
+    fn collect_diagnostics(self, diags: &mut Diagnostics) -> Self::Output {
+        if self.is_none() && diags.errors.is_empty() {
+            diags.root_error_short("Internal error");
         }
         self
     }
 }
 
-impl<T, E> ExtractDiagnostics for Result<T, E>
+impl<T, E> CollectDiagnostics for Result<T, E>
 where
     E: ToString,
 {
     type Output = Option<T>;
-    fn extract_diagnostics(self, diags: &mut Diagnostics) -> Self::Output {
+    fn collect_diagnostics(self, diags: &mut Diagnostics) -> Self::Output {
         match self {
             Ok(value) => Some(value),
             Err(err) => {
-                diags.root_error_short(err);
+                diags.root_error("Internal error", err);
                 None
             }
         }

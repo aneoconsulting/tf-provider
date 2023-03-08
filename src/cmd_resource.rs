@@ -2,16 +2,16 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 use tf_provider::{
-    schema::{Block, Description, NestedBlock},
-    value::Value,
-    Resource, Schema,
+    schema::{Attribute, AttributeConstraint, Block, Description, NestedBlock},
+    Resource, Schema, Value,
 };
 
 pub struct CmdResource {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct State {
-    pub read: Value<HashMap<String, ()>>,
+    pub dummy: i64,
+    pub read: HashMap<String, Value<()>>,
 }
 
 impl Resource for CmdResource {
@@ -19,14 +19,25 @@ impl Resource for CmdResource {
 
     type PrivateState = Value<()>;
 
-    type ProviderMetaState = crate::cmd_provider::ProviderMeta;
+    type ProviderMetaState = Value<crate::cmd_provider::ProviderMeta>;
 
     fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<Schema> {
         Some(Schema {
             version: 1,
             block: Block {
                 version: 1,
-                attributes: Default::default(),
+                attributes: [(
+                    "dummy".to_string(),
+                    Attribute {
+                        attr_type: tf_provider::schema::AttributeType::Number,
+                        description: Description::plain("dummy"),
+                        constraint: AttributeConstraint::Optional,
+                        sensitive: false,
+                        deprecated: false,
+                    },
+                )]
+                .into_iter()
+                .collect(),
                 blocks: [(
                     "read".to_string(),
                     NestedBlock::Map(Block {
@@ -37,8 +48,7 @@ impl Resource for CmdResource {
                         deprecated: false,
                     }),
                 )]
-                .iter()
-                .cloned()
+                .into_iter()
                 .collect(),
                 description: Description::plain("cmd_test"),
                 deprecated: false,

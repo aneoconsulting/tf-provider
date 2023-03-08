@@ -13,20 +13,34 @@ impl DynamicValue {
         T: DeserializeOwned,
     {
         match self {
-            Self::MessagePack(mp) => match rmp_serde::from_slice::<T>(mp.as_slice()) {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    diags.root_error_short(err.to_string());
-                    None
+            Self::MessagePack(mp) => {
+                let slice = if mp.is_empty() {
+                    &[0xc0_u8] // null MessagePack
+                } else {
+                    mp.as_slice()
+                };
+                match rmp_serde::from_slice::<T>(slice) {
+                    Ok(value) => Some(value),
+                    Err(err) => {
+                        diags.root_error_short(err.to_string());
+                        None
+                    }
                 }
-            },
-            Self::Json(json) => match serde_json::from_slice::<T>(json.as_slice()) {
-                Ok(value) => Some(value),
-                Err(err) => {
-                    diags.root_error_short(err);
-                    None
+            }
+            Self::Json(json) => {
+                let slice = if json.is_empty() {
+                    "null".as_bytes()
+                } else {
+                    json.as_slice()
+                };
+                match serde_json::from_slice::<T>(slice) {
+                    Ok(value) => Some(value),
+                    Err(err) => {
+                        diags.root_error_short(err);
+                        None
+                    }
                 }
-            },
+            }
         }
     }
 
@@ -34,7 +48,7 @@ impl DynamicValue {
     where
         T: Serialize,
     {
-        match rmp_serde::to_vec(value) {
+        match rmp_serde::to_vec_named(value) {
             Ok(value) => Some(value),
             Err(err) => {
                 diags.root_error_short(err);

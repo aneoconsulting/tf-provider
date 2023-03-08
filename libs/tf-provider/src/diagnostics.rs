@@ -1,4 +1,6 @@
-use crate::{attribute_path::AttributePath, tfplugin6};
+use std::backtrace::{Backtrace, BacktraceStatus};
+
+use crate::{attribute_path::AttributePath, tfplugin6, utils::CollectDiagnostics};
 
 /// List of Errors and Warnings to send back to Terraform
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
@@ -68,10 +70,7 @@ impl Diagnostics {
     }
     /// Add an internal error if there is no existing errors
     pub fn internal_error(&mut self) {
-        if self.errors.is_empty() {
-            self.root_error_short("Internal error");
-            panic!("internal error")
-        }
+        Option::<()>::None.collect_diagnostics(self);
     }
 }
 
@@ -86,35 +85,32 @@ pub struct Diagnostic {
 impl Diagnostic {
     /// Create a diagnostic
     pub fn new<S: ToString, D: ToString>(summary: S, detail: D, attribute: AttributePath) -> Self {
+        let backtrace = Backtrace::capture();
+        let mut detail = detail.to_string();
+        if backtrace.status() == BacktraceStatus::Captured {
+            if detail.is_empty() {
+                detail = format!("{}", backtrace);
+            } else {
+                detail = format!("{}\n{}", detail, backtrace);
+            }
+        }
         Self {
             summary: summary.to_string(),
-            detail: detail.to_string(),
+            detail: detail,
             attribute,
         }
     }
     /// Create a diagnostic without AttributePath
     pub fn root<S: ToString, D: ToString>(summary: S, detail: D) -> Self {
-        Self {
-            summary: summary.to_string(),
-            detail: detail.to_string(),
-            attribute: Default::default(),
-        }
+        Self::new(summary, detail, Default::default())
     }
     /// Create a diagnostic without details
     pub fn short<S: ToString>(summary: S, attribute: AttributePath) -> Self {
-        Self {
-            summary: summary.to_string(),
-            detail: Default::default(),
-            attribute,
-        }
+        Self::new(summary, String::default(), attribute)
     }
     /// Create a diagnostic AttributePath nor details
     pub fn root_short<S: ToString>(summary: S) -> Self {
-        Self {
-            summary: summary.to_string(),
-            detail: Default::default(),
-            attribute: Default::default(),
-        }
+        Self::new(summary, String::default(), Default::default())
     }
 }
 

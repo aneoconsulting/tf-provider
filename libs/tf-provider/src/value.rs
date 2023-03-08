@@ -11,9 +11,10 @@ use serde::Serialize;
 #[serde(rename = "_ExtStruct")]
 struct ExtStruct((i8, serde_bytes::ByteBuf));
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Default)]
 pub enum Value<T> {
     Value(T),
+    #[default]
     Null,
     Unknown,
 }
@@ -340,13 +341,6 @@ impl<T> Value<&mut T> {
             Value::Null => Value::Null,
             Value::Unknown => Value::Unknown,
         }
-    }
-}
-
-impl<T> Default for Value<T> {
-    #[inline]
-    fn default() -> Self {
-        Value::Null
     }
 }
 

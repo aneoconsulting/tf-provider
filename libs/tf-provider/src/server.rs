@@ -27,7 +27,7 @@ use crate::data_source::DynamicDataSource;
 use crate::plugin::GrpcIo;
 use crate::provider::DynamicProvider;
 use crate::resource::DynamicResource;
-use crate::Diagnostics;
+use crate::{Diagnostics, Schema};
 
 const CORE_PROTOCOL_VERSION: u8 = 1;
 
@@ -36,19 +36,53 @@ pub struct Server {
     pub(crate) io: GrpcIo,
     pub(crate) cancellation_token: CancellationToken,
 
-    resources: HashMap<String, Box<dyn DynamicResource>>,
-    data_sources: HashMap<String, Box<dyn DynamicDataSource>>,
+    pub(crate) init_diags: Diagnostics,
+    pub(crate) schema: Option<Schema>,
+    pub(crate) meta_schema: Option<Schema>,
+    pub(crate) resources: HashMap<String, (Box<dyn DynamicResource>, Schema)>,
+    pub(crate) data_sources: HashMap<String, (Box<dyn DynamicDataSource>, Schema)>,
 }
 
 impl Server {
     pub fn new(provider: Box<dyn DynamicProvider>) -> Arc<Self> {
         let mut diags = Default::default();
-        let resources = provider.get_resources(&mut diags).unwrap_or_default();
-        let data_sources = provider.get_data_sources(&mut diags).unwrap_or_default();
+        let mut has_errors = false;
+        let mut set_error = || {
+            has_errors = true;
+            None
+        };
+        let schema = provider.schema(&mut diags).or_else(&mut set_error);
+        let meta_schema = provider.meta_schema(&mut diags).or_else(&mut set_error);
+        let resources = provider
+            .get_resources(&mut diags)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(name, resource)| {
+                let schema = resource.schema(&mut diags).or_else(&mut set_error)?;
+                Some((name, (resource, schema)))
+            })
+            .collect();
+        let data_sources = provider
+            .get_data_sources(&mut diags)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(name, data_source)| {
+                let schema = data_source.schema(&mut diags).or_else(&mut set_error)?;
+                Some((name, (data_source, schema)))
+            })
+            .collect();
+
+        if has_errors {
+            diags.internal_error()
+        }
+
         Arc::new(Self {
             provider,
             io: Default::default(),
             cancellation_token: Default::default(),
+            init_diags: diags,
+            schema,
+            meta_schema,
             resources,
             data_sources,
         })
@@ -100,7 +134,7 @@ impl Server {
         name: &str,
     ) -> Option<&'a dyn DynamicResource> {
         if let Some(resource) = self.resources.get(name) {
-            Some(resource.as_ref())
+            Some(resource.0.as_ref())
         } else {
             diags.root_error_short(format!("Could not find resource `{}` in provider", name));
             None
@@ -112,7 +146,7 @@ impl Server {
         name: &str,
     ) -> Option<&'a dyn DynamicDataSource> {
         if let Some(data_source) = self.data_sources.get(name) {
-            Some(data_source.as_ref())
+            Some(data_source.0.as_ref())
         } else {
             diags.root_error_short(format!("Could not find data source `{}` in provider", name));
             None
