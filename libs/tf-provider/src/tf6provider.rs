@@ -13,7 +13,7 @@ impl tf::provider_server::Provider for Arc<Server> {
         _request: tonic::Request<tf::get_provider_schema::Request>,
     ) -> Result<tonic::Response<tf::get_provider_schema::Response>, tonic::Status> {
         let mut diags = Diagnostics::default();
-        let mut has_errors = true;
+        let mut has_errors = false;
         let schema = if let Some(schema) = self.provider.schema(&mut diags) {
             Some(schema.into())
         } else {

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::{Seek, SeekFrom};
@@ -34,14 +35,22 @@ pub struct Server {
     pub(crate) provider: Box<dyn DynamicProvider>,
     pub(crate) io: GrpcIo,
     pub(crate) cancellation_token: CancellationToken,
+
+    resources: HashMap<String, Box<dyn DynamicResource>>,
+    data_sources: HashMap<String, Box<dyn DynamicDataSource>>,
 }
 
 impl Server {
     pub fn new(provider: Box<dyn DynamicProvider>) -> Arc<Self> {
+        let mut diags = Default::default();
+        let resources = provider.get_resources(&mut diags).unwrap_or_default();
+        let data_sources = provider.get_data_sources(&mut diags).unwrap_or_default();
         Arc::new(Self {
             provider,
             io: Default::default(),
             cancellation_token: Default::default(),
+            resources,
+            data_sources,
         })
     }
 
@@ -90,7 +99,7 @@ impl Server {
         diags: &mut Diagnostics,
         name: &str,
     ) -> Option<&'a dyn DynamicResource> {
-        if let Some(resource) = self.provider.get_resources(diags)?.get(name) {
+        if let Some(resource) = self.resources.get(name) {
             Some(resource.as_ref())
         } else {
             diags.root_error_short(format!("Could not find resource `{}` in provider", name));
@@ -102,7 +111,7 @@ impl Server {
         diags: &mut Diagnostics,
         name: &str,
     ) -> Option<&'a dyn DynamicDataSource> {
-        if let Some(data_source) = self.provider.get_data_sources(diags)?.get(name) {
+        if let Some(data_source) = self.data_sources.get(name) {
             Some(data_source.as_ref())
         } else {
             diags.root_error_short(format!("Could not find data source `{}` in provider", name));

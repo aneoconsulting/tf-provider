@@ -70,6 +70,7 @@ impl Diagnostics {
     pub fn internal_error(&mut self) {
         if self.errors.is_empty() {
             self.root_error_short("Internal error");
+            panic!("internal error")
         }
     }
 }

@@ -39,16 +39,16 @@ pub trait Provider: Send + Sync + 'static {
     }
 
     /// Get the resources of the provider
-    fn get_resources<'a>(
-        &'a self,
+    fn get_resources(
+        &self,
         diags: &mut Diagnostics,
-    ) -> Option<&'a HashMap<String, Box<dyn DynamicResource>>>;
+    ) -> Option<HashMap<String, Box<dyn DynamicResource>>>;
 
     /// Get the data sources of the provider
-    fn get_data_sources<'a>(
-        &'a self,
+    fn get_data_sources(
+        &self,
         diags: &mut Diagnostics,
-    ) -> Option<&'a HashMap<String, Box<dyn DynamicDataSource>>>;
+    ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>>;
 }
 
 pub trait DynamicProvider: Send + Sync + 'static {
@@ -74,16 +74,16 @@ pub trait DynamicProvider: Send + Sync + 'static {
     }
 
     /// Get the resources of the provider
-    fn get_resources<'a>(
-        &'a self,
+    fn get_resources(
+        &self,
         diags: &mut Diagnostics,
-    ) -> Option<&'a HashMap<String, Box<dyn DynamicResource>>>;
+    ) -> Option<HashMap<String, Box<dyn DynamicResource>>>;
 
     /// Get the data sources of the provider
-    fn get_data_sources<'a>(
-        &'a self,
+    fn get_data_sources(
+        &self,
         diags: &mut Diagnostics,
-    ) -> Option<&'a HashMap<String, Box<dyn DynamicDataSource>>>;
+    ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>>;
 }
 
 impl<T: Provider> DynamicProvider for T {
@@ -113,18 +113,18 @@ impl<T: Provider> DynamicProvider for T {
     }
 
     /// Get the resources of the provider
-    fn get_resources<'a>(
-        &'a self,
+    fn get_resources(
+        &self,
         diags: &mut Diagnostics,
-    ) -> Option<&'a HashMap<String, Box<dyn DynamicResource>>> {
+    ) -> Option<HashMap<String, Box<dyn DynamicResource>>> {
         <T as Provider>::get_resources(self, diags)
     }
 
     /// Get the data sources of the provider
-    fn get_data_sources<'a>(
-        &'a self,
+    fn get_data_sources(
+        &self,
         diags: &mut Diagnostics,
-    ) -> Option<&'a HashMap<String, Box<dyn DynamicDataSource>>> {
+    ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>> {
         <T as Provider>::get_data_sources(self, diags)
     }
 }

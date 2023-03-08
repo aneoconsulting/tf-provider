@@ -1,0 +1,90 @@
+use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
+use tf_provider::{
+    schema::{Block, Description, NestedBlock},
+    value::Value,
+    Resource, Schema,
+};
+
+pub struct CmdResource {}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct State {
+    pub read: Value<HashMap<String, ()>>,
+}
+
+impl Resource for CmdResource {
+    type State = Value<State>;
+
+    type PrivateState = Value<()>;
+
+    type ProviderMetaState = crate::cmd_provider::ProviderMeta;
+
+    fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<Schema> {
+        Some(Schema {
+            version: 1,
+            block: Block {
+                version: 1,
+                attributes: Default::default(),
+                blocks: [(
+                    "read".to_string(),
+                    NestedBlock::Map(Block {
+                        version: 1,
+                        attributes: Default::default(),
+                        blocks: Default::default(),
+                        description: Description::plain("read"),
+                        deprecated: false,
+                    }),
+                )]
+                .iter()
+                .cloned()
+                .collect(),
+                description: Description::plain("cmd_test"),
+                deprecated: false,
+            },
+        })
+    }
+
+    fn validate(&self, _diags: &mut tf_provider::Diagnostics, _config: Self::State) -> Option<()> {
+        Some(())
+    }
+
+    fn read(
+        &self,
+        _diags: &mut tf_provider::Diagnostics,
+        state: Self::State,
+        private_state: Self::PrivateState,
+        _provider_meta_state: Self::ProviderMetaState,
+    ) -> Option<(Self::State, Self::PrivateState)> {
+        Some((state, private_state))
+    }
+
+    fn plan(
+        &self,
+        _diags: &mut tf_provider::Diagnostics,
+        _prior_state: Self::State,
+        proposed_state: Self::State,
+        _config_state: Self::State,
+        prior_private_state: Self::PrivateState,
+        _provider_meta_state: Self::ProviderMetaState,
+    ) -> Option<(
+        Self::State,
+        Self::PrivateState,
+        Vec<tf_provider::attribute_path::AttributePath>,
+    )> {
+        Some((proposed_state, prior_private_state, vec![]))
+    }
+
+    fn apply(
+        &self,
+        _diags: &mut tf_provider::Diagnostics,
+        _prior_state: Self::State,
+        planned_state: Self::State,
+        _config_state: Self::State,
+        planned_private_state: Self::PrivateState,
+        _provider_meta_state: Self::ProviderMetaState,
+    ) -> Option<(Self::State, Self::PrivateState)> {
+        Some((planned_state, planned_private_state))
+    }
+}

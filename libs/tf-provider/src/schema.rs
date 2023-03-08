@@ -113,10 +113,13 @@ fn cvt_nested_blocks_tf6(
                 block: Some(block.into()),
                 nesting: nesting_mode as i32,
                 min_items: 0,
-                max_items: if nesting_mode == NestingMode::Single {
-                    1
-                } else {
-                    i64::MAX
+                max_items: match nesting_mode {
+                    NestingMode::Invalid => 0,
+                    NestingMode::Single => 1,
+                    NestingMode::List => i64::MAX,
+                    NestingMode::Set => i64::MAX,
+                    NestingMode::Map => 0,
+                    NestingMode::Group => 1,
                 },
             }
         })

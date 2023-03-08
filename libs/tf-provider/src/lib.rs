@@ -22,3 +22,8 @@ pub use provider::Provider;
 pub use resource::Resource;
 pub use schema::Schema;
 pub use server::Server;
+
+pub async fn serve<T: provider::DynamicProvider>(provider: T) -> anyhow::Result<()> {
+    let server = Server::new(Box::new(provider));
+    server::Server::serve(server).await
+}
