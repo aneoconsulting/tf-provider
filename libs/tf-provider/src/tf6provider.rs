@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::diagnostics::Diagnostics;
-use crate::dynamic::DynamicValue;
+use crate::raw::RawValue;
 use crate::server::Server;
 use crate::tfplugin6 as tf;
 use crate::tfplugin6::get_provider_schema::ServerCapabilities;
@@ -115,7 +115,7 @@ impl tf::provider_server::Provider for Arc<Server> {
                 diags.root_error_short("Upgrading from a legacy state is not supported");
                 None
             } else {
-                let json = DynamicValue::Json(raw_state.json);
+                let json = RawValue::Json(raw_state.json);
                 if request.version == schema.version {
                     Some(json)
                 } else {

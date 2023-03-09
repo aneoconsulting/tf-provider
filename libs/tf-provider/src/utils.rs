@@ -1,4 +1,29 @@
+use serde::{Deserialize, Serialize};
+
 use crate::diagnostics::Diagnostics;
+
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename = "_ExtStruct")]
+pub(crate) struct ExtStruct(pub (i8, serde_bytes::ByteBuf));
+
+pub(crate) mod serde_unknown {
+    use super::ExtStruct;
+    use serde::{Deserialize, Serialize};
+
+    pub fn serialize<S>(serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        ExtStruct((0, serde_bytes::ByteBuf::from(vec![]))).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<(), D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        ExtStruct::deserialize(deserializer).and(Ok(()))
+    }
+}
 
 pub trait OptionFactor {
     type Output;

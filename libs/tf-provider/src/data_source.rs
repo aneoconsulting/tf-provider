@@ -1,5 +1,5 @@
 use crate::diagnostics::Diagnostics;
-use crate::dynamic::DynamicValue;
+use crate::raw::RawValue;
 use crate::schema::Schema;
 use crate::utils::OptionFactor;
 
@@ -32,14 +32,14 @@ pub trait DynamicDataSource: Send + Sync {
     /// Get the schema of the data source
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the data source
-    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()>;
     /// Read the new state of the data source
     async fn read(
         &self,
         diags: &mut Diagnostics,
-        config: DynamicValue,
-        provider_meta_state: DynamicValue,
-    ) -> Option<DynamicValue>;
+        config: RawValue,
+        provider_meta_state: RawValue,
+    ) -> Option<RawValue>;
 }
 
 #[async_trait]
@@ -47,22 +47,22 @@ impl<T: DataSource> DynamicDataSource for T {
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
         <T as DataSource>::schema(self, diags)
     }
-    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
+    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()> {
         let config = config.deserialize(diags)?;
         <T as DataSource>::validate(self, diags, config).await
     }
     async fn read(
         &self,
         diags: &mut Diagnostics,
-        config: DynamicValue,
-        provider_meta_state: DynamicValue,
-    ) -> Option<DynamicValue> {
+        config: RawValue,
+        provider_meta_state: RawValue,
+    ) -> Option<RawValue> {
         let (config, provider_meta_state) = (
             config.deserialize(diags),
             provider_meta_state.deserialize(diags),
         )
             .factor()?;
         let state = <T as DataSource>::read(self, diags, config, provider_meta_state).await?;
-        DynamicValue::serialize(diags, &state)
+        RawValue::serialize(diags, &state)
     }
 }

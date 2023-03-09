@@ -4,18 +4,19 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename = "_ExtStruct")]
-struct ExtStruct((i8, serde_bytes::ByteBuf));
+use crate::utils::serde_unknown;
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Default)]
+#[derive(
+    Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Default, Serialize, Deserialize,
+)]
+#[serde(untagged)]
 pub enum Value<T> {
     Value(T),
     #[default]
     Null,
+    #[serde(with = "serde_unknown")]
     Unknown,
 }
 
@@ -405,93 +406,6 @@ impl<T> From<Option<T>> for Value<T> {
         match value {
             Some(x) => Self::Value(x),
             None => Self::Null,
-        }
-    }
-}
-/*
-impl<T> TryFrom<DynamicValue> for Value<T> {
-    type Error = serde::de::value::Error;
-
-    fn try_from(value: DynamicValue) -> Result<Self, Self::Error> {
-        if value.msgpack.is_empty() {
-            serde_json::from_slice(value.json.as_slice()).map_err(serde::de::Error::custom)
-        } else {
-            rmp_serde::from_slice(value.msgpack.as_slice()).map_err(serde::de::Error::custom)
-        }
-    }
-}
-
-
-impl<T> From<DynamicValue> for Value<T> {
-
-    fn from(value: DynamicValue) -> Self {
-        if value.msgpack.is_empty() {
-            serde_json::from_slice(value.json.as_slice())
-        } else {
-            rmp_serde::from_slice(value.msgpack.as_slice())
-        }
-    }
-}
-
-
-impl<T> TryInto<T> for Value<T> {
-    type Error = ();
-    fn try_into(self) -> Result<T, Self::Error> {
-        if let Value::Some(value) = self {
-            Ok(value)
-        } else {
-            Err(Self::Error())
-        }
-    }
-}
-*/
-
-impl<T> Serialize for Value<T>
-where
-    T: Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match self {
-            Self::Value(x) => x.serialize(serializer),
-            Self::Null => ().serialize(serializer),
-            Self::Unknown => {
-                ExtStruct((0, serde_bytes::ByteBuf::from(vec![]))).serialize(serializer)
-            }
-        }
-    }
-}
-
-impl<'de, T> Deserialize<'de> for Value<T>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum WireValue<T> {
-            Val(T),
-            Null,
-            Ext(ExtStruct),
-        }
-        let deserialized = WireValue::<T>::deserialize(deserializer)?;
-
-        match deserialized {
-            WireValue::Val(x) => Ok(Value::from(x)),
-            WireValue::Null => Ok(Value::Null),
-            WireValue::Ext(ExtStruct((idx, _))) => {
-                if idx == 0 {
-                    Ok(Value::Unknown)
-                } else {
-                    // FIXME: proper error handling
-                    panic!("Invalid extension")
-                }
-            }
         }
     }
 }

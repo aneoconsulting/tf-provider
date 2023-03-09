@@ -2,12 +2,12 @@ use crate::{diagnostics::Diagnostics, tfplugin6};
 use serde::{de::DeserializeOwned, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum DynamicValue {
+pub enum RawValue {
     MessagePack(Vec<u8>),
     Json(Vec<u8>),
 }
 
-impl DynamicValue {
+impl RawValue {
     pub fn deserialize<T>(&self, diags: &mut Diagnostics) -> Option<T>
     where
         T: DeserializeOwned,
@@ -56,7 +56,7 @@ impl DynamicValue {
             }
         }
     }
-    pub fn serialize<T>(diags: &mut Diagnostics, value: &T) -> Option<DynamicValue>
+    pub fn serialize<T>(diags: &mut Diagnostics, value: &T) -> Option<RawValue>
     where
         T: Serialize,
     {
@@ -64,24 +64,24 @@ impl DynamicValue {
     }
 }
 
-impl From<tfplugin6::DynamicValue> for DynamicValue {
+impl From<tfplugin6::DynamicValue> for RawValue {
     fn from(value: tfplugin6::DynamicValue) -> Self {
         if value.msgpack.is_empty() {
-            DynamicValue::Json(value.json)
+            RawValue::Json(value.json)
         } else {
-            DynamicValue::MessagePack(value.msgpack)
+            RawValue::MessagePack(value.msgpack)
         }
     }
 }
 
-impl From<DynamicValue> for tfplugin6::DynamicValue {
-    fn from(value: DynamicValue) -> Self {
+impl From<RawValue> for tfplugin6::DynamicValue {
+    fn from(value: RawValue) -> Self {
         match value {
-            DynamicValue::MessagePack(msgpack) => Self {
+            RawValue::MessagePack(msgpack) => Self {
                 msgpack,
                 json: Default::default(),
             },
-            DynamicValue::Json(json) => Self {
+            RawValue::Json(json) => Self {
                 msgpack: Default::default(),
                 json,
             },

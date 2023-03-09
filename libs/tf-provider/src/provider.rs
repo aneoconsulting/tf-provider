@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::data_source::DynamicDataSource;
 use crate::diagnostics::Diagnostics;
-use crate::dynamic::DynamicValue;
+use crate::raw::RawValue;
 use crate::resource::DynamicResource;
 use crate::schema::Block;
 use crate::schema::Schema;
@@ -60,14 +60,14 @@ pub trait DynamicProvider: Send + Sync + 'static {
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
 
     /// Validate the configuration of the provider
-    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()>;
 
     /// Configure the provider
     async fn configure(
         &self,
         diags: &mut Diagnostics,
         terraform_version: String,
-        config: DynamicValue,
+        config: RawValue,
     ) -> Option<()>;
 
     /// Get the schema for the provider metadata (defaults to empty)
@@ -100,7 +100,7 @@ impl<T: Provider> DynamicProvider for T {
     }
 
     /// Validate the configuration of the provider
-    async fn validate(&self, diags: &mut Diagnostics, config: DynamicValue) -> Option<()> {
+    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()> {
         let config = config.deserialize(diags)?;
         <T as Provider>::validate(self, diags, config).await
     }
@@ -110,7 +110,7 @@ impl<T: Provider> DynamicProvider for T {
         &self,
         diags: &mut Diagnostics,
         terraform_version: String,
-        config: DynamicValue,
+        config: RawValue,
     ) -> Option<()> {
         let config = config.deserialize(diags)?;
         <T as Provider>::configure(self, diags, terraform_version, config).await

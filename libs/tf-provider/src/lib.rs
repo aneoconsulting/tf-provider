@@ -1,9 +1,10 @@
+//pub mod any;
 pub mod attribute_path;
 pub mod data_source;
 pub mod diagnostics;
-pub mod dynamic;
 pub mod plugin;
 pub mod provider;
+pub mod raw;
 pub mod resource;
 pub mod schema;
 pub mod server;
