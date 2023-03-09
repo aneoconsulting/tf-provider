@@ -4,8 +4,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use tf_provider::{
-    schema::{Attribute, AttributeConstraint, Block, Description, NestedBlock},
-    EmptyValue, Resource, Schema, Value,
+    Attribute, AttributeConstraint, Block, Description, EmptyValue, NestedBlock, Resource, Schema,
+    Value,
 };
 
 pub struct CmdResource {}

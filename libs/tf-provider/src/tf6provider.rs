@@ -13,17 +13,17 @@ impl tf::provider_server::Provider for Arc<Server> {
         &self,
         _request: tonic::Request<tf::get_provider_schema::Request>,
     ) -> Result<tonic::Response<tf::get_provider_schema::Response>, tonic::Status> {
-        let schema = self.schema.clone().map_into();
-        let meta_schema = self.meta_schema.clone().map_into();
+        let schema = self.schema.as_ref().map_into();
+        let meta_schema = self.meta_schema.as_ref().map_into();
         let resources = self
             .resources
             .iter()
-            .map(|(name, (_, schema))| (name.clone(), schema.clone().into()))
+            .map(|(name, (_, schema))| (name.clone(), schema.into()))
             .collect();
         let data_sources = self
             .data_sources
             .iter()
-            .map(|(name, (_, schema))| (name.clone(), schema.clone().into()))
+            .map(|(name, (_, schema))| (name.clone(), schema.into()))
             .collect();
 
         Ok(tonic::Response::new(tf::get_provider_schema::Response {

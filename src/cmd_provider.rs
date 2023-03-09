@@ -2,10 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 
-use tf_provider::{
-    schema::{Block, Description},
-    EmptyValue, Provider, Schema,
-};
+use tf_provider::{Block, Description, EmptyValue, Provider, Schema};
 
 use crate::cmd_resource::CmdResource;
 

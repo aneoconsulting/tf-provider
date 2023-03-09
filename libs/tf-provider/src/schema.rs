@@ -95,11 +95,11 @@ impl Block {
 }
 
 fn cvt_nested_blocks_tf6(
-    blocks: HashMap<String, NestedBlock>,
+    blocks: &HashMap<String, NestedBlock>,
 ) -> ::prost::alloc::vec::Vec<tfplugin6::schema::NestedBlock> {
     use tfplugin6::schema::nested_block::NestingMode;
     blocks
-        .into_iter()
+        .iter()
         .map(|(name, block)| {
             let (nesting_mode, block) = match block {
                 NestedBlock::Single(block) => (NestingMode::Single, block),
@@ -109,7 +109,7 @@ fn cvt_nested_blocks_tf6(
                 NestedBlock::Group(block) => (NestingMode::Group, block),
             };
             tfplugin6::schema::NestedBlock {
-                type_name: name,
+                type_name: name.clone(),
                 block: Some(block.into()),
                 nesting: nesting_mode as i32,
                 min_items: 0,
@@ -128,15 +128,15 @@ fn cvt_nested_blocks_tf6(
 
 #[allow(deprecated)]
 fn cvt_attributes_tf6(
-    attrs: HashMap<String, Attribute>,
+    attrs: &HashMap<String, Attribute>,
 ) -> ::prost::alloc::vec::Vec<tfplugin6::schema::Attribute> {
     use tfplugin6::schema::object::NestingMode;
     use tfplugin6::schema::Object;
     attrs
-        .into_iter()
+        .iter()
         .map(|(name, attr)| {
             let attr_type = attr.attr_type.to_string().into();
-            let nested = match attr.attr_type {
+            let nested = match &attr.attr_type {
                 AttributeType::AttributeSingle(attrs) => Some((NestingMode::Single, attrs)),
                 AttributeType::AttributeList(attrs) => Some((NestingMode::List, attrs)),
                 AttributeType::AttributeSet(attrs) => Some((NestingMode::Set, attrs)),
@@ -144,7 +144,7 @@ fn cvt_attributes_tf6(
                 _ => None,
             }
             .map(|(nesting_mode, attrs)| Object {
-                attributes: cvt_attributes_tf6(attrs),
+                attributes: cvt_attributes_tf6(&attrs),
                 nesting: nesting_mode as i32,
                 min_items: 0,
                 max_items: if nesting_mode == NestingMode::Single {
@@ -154,10 +154,10 @@ fn cvt_attributes_tf6(
                 },
             });
             tfplugin6::schema::Attribute {
-                name,
+                name: name.clone(),
                 r#type: attr_type,
                 nested_type: nested,
-                description: attr.description.content,
+                description: attr.description.content.clone(),
                 required: attr.constraint == AttributeConstraint::Required,
                 optional: attr.constraint == AttributeConstraint::OptionalComputed
                     || attr.constraint == AttributeConstraint::Optional,
@@ -174,13 +174,13 @@ fn cvt_attributes_tf6(
         .collect()
 }
 
-impl From<Block> for tfplugin6::schema::Block {
-    fn from(value: Block) -> Self {
+impl From<&Block> for tfplugin6::schema::Block {
+    fn from(value: &Block) -> Self {
         Self {
-            attributes: cvt_attributes_tf6(value.attributes),
-            block_types: cvt_nested_blocks_tf6(value.blocks),
+            attributes: cvt_attributes_tf6(&value.attributes),
+            block_types: cvt_nested_blocks_tf6(&value.blocks),
             version: value.version,
-            description: value.description.content,
+            description: value.description.content.clone(),
             description_kind: match value.description.kind {
                 StringKind::Plain => tfplugin6::StringKind::Plain,
                 StringKind::Markdown => tfplugin6::StringKind::Markdown,
@@ -329,11 +329,11 @@ pub struct Schema {
     pub block: Block,
 }
 
-impl From<Schema> for tfplugin6::Schema {
-    fn from(value: Schema) -> Self {
+impl From<&Schema> for tfplugin6::Schema {
+    fn from(value: &Schema) -> Self {
         Self {
             version: value.version,
-            block: Some(value.block.into()),
+            block: Some((&value.block).into()),
         }
     }
 }

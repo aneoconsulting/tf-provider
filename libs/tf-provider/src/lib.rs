@@ -20,7 +20,9 @@ pub use data_source::DataSource;
 pub use diagnostics::Diagnostics;
 pub use provider::Provider;
 pub use resource::Resource;
-pub use schema::Schema;
+pub use schema::{
+    Attribute, AttributeConstraint, AttributeType, Block, Description, NestedBlock, Schema,
+};
 pub use server::serve;
 pub use value::EmptyValue;
 pub use value::Value;
