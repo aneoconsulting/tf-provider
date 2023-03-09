@@ -81,9 +81,9 @@ pub struct Block {
     pub deprecated: bool,
 }
 
-impl Block {
+impl Default for Block {
     /// Create an empty block (with a version of 1, and a description "empty")
-    pub fn empty() -> Block {
+    fn default() -> Block {
         Block {
             version: 1,
             attributes: Default::default(),
@@ -108,19 +108,17 @@ fn cvt_nested_blocks_tf6(
                 NestedBlock::Map(block) => (NestingMode::Map, block),
                 NestedBlock::Group(block) => (NestingMode::Group, block),
             };
+            let nitems = match nesting_mode {
+                NestingMode::Single => (1, 1),
+                NestingMode::List | NestingMode::Set => (0, i64::MAX),
+                _ => (0, 0),
+            };
             tfplugin6::schema::NestedBlock {
                 type_name: name.clone(),
                 block: Some(block.into()),
                 nesting: nesting_mode as i32,
-                min_items: 0,
-                max_items: match nesting_mode {
-                    NestingMode::Invalid => 0,
-                    NestingMode::Single => 1,
-                    NestingMode::List => i64::MAX,
-                    NestingMode::Set => i64::MAX,
-                    NestingMode::Map => 0,
-                    NestingMode::Group => 1,
-                },
+                min_items: nitems.0,
+                max_items: nitems.1,
             }
         })
         .collect()
@@ -318,7 +316,17 @@ pub struct Attribute {
     pub deprecated: bool,
 }
 
-impl Attribute {}
+impl Default for Attribute {
+    fn default() -> Self {
+        Self {
+            attr_type: AttributeType::Any,
+            description: "empty".into(),
+            constraint: AttributeConstraint::OptionalComputed,
+            sensitive: false,
+            deprecated: false,
+        }
+    }
+}
 
 /// Schema
 #[derive(Clone, PartialEq, Eq, Debug)]

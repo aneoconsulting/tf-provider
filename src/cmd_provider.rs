@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 
-use tf_provider::{Block, Description, EmptyValue, Provider, Schema};
+use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
 use crate::cmd_resource::CmdResource;
 
@@ -11,18 +11,15 @@ pub struct CmdProvider {}
 
 #[async_trait]
 impl Provider for CmdProvider {
-    type Config = EmptyValue;
-    type MetaState = EmptyValue;
+    type Config = ValueEmpty;
+    type MetaState = ValueEmpty;
 
     fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<tf_provider::Schema> {
         Some(Schema {
             version: 1,
             block: Block {
-                version: 1,
-                attributes: Default::default(),
-                blocks: Default::default(),
                 description: Description::plain("cmd"),
-                deprecated: false,
+                ..Default::default()
             },
         })
     }
@@ -49,9 +46,9 @@ impl Provider for CmdProvider {
         _diags: &mut tf_provider::Diagnostics,
     ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::resource::DynamicResource>>>
     {
-        let mut resources = HashMap::default();
-        resources.insert("test".into(), Box::new(CmdResource {}) as _);
-        Some(resources)
+        Some(map! {
+            "local_exec" => CmdResource {},
+        })
     }
 
     fn get_data_sources(

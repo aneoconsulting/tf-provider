@@ -66,3 +66,9 @@ impl<T: DataSource> DynamicDataSource for T {
         RawValue::serialize(diags, &state)
     }
 }
+
+impl<T: DataSource + 'static> From<T> for Box<dyn DynamicDataSource> {
+    fn from(value: T) -> Self {
+        Box::new(value)
+    }
+}

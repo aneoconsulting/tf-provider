@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashMap, HashSet},
     iter::FusedIterator,
     mem,
     ops::{Deref, DerefMut},
@@ -20,12 +21,40 @@ pub enum Value<T> {
     Unknown,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ValueAny {
+    String(String),
+    Number(i64),
+    Bool(bool),
+    List(Vec<ValueAny>),
+    Map(HashMap<String, ValueAny>),
+    #[default]
+    Null,
+    #[serde(with = "serde_unknown")]
+    Unknown,
+}
+
+impl ValueAny {
+    pub fn json(&self) -> String {
+        serde_json::to_string(self).unwrap_or("<invalid>".into())
+    }
+    pub fn json_pretty(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or("<invalid>".into())
+    }
+}
+
 #[derive(
     Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Default, Serialize, Deserialize,
 )]
-pub struct EmptyStruct {}
+pub struct StructEmpty {}
 
-pub type EmptyValue = Value<EmptyStruct>;
+pub type ValueEmpty = Value<StructEmpty>;
+pub type ValueString = Value<String>;
+pub type ValueNumber = Value<i64>;
+pub type ValueList<T> = Value<Vec<T>>;
+pub type ValueSet<T> = Value<HashSet<T>>;
+pub type ValueMap<T> = Value<HashMap<String, T>>;
 
 impl<T> Value<T> {
     /////////////////////////////////////////////////////////////////////////

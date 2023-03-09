@@ -1,4 +1,3 @@
-//pub mod any;
 pub mod attribute_path;
 pub mod data_source;
 pub mod diagnostics;
@@ -25,5 +24,21 @@ pub use schema::{
     Attribute, AttributeConstraint, AttributeType, Block, Description, NestedBlock, Schema,
 };
 pub use server::serve;
-pub use value::EmptyValue;
-pub use value::Value;
+pub use value::{
+    Value, ValueAny, ValueEmpty, ValueList, ValueMap, ValueNumber, ValueSet, ValueString,
+};
+
+#[macro_export]
+macro_rules! map {
+    {$($key:expr => $value:expr),*} => {
+        {
+            let mut map = HashMap::default();
+            $(
+                map.insert($key.into(), $value.into());
+            )*
+            map
+        }
+    };
+
+    {$($key:expr => $value:expr),+ ,} => { map!{$($key => $value),+} };
+}

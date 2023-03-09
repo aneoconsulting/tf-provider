@@ -4,7 +4,6 @@ use crate::data_source::DynamicDataSource;
 use crate::diagnostics::Diagnostics;
 use crate::raw::RawValue;
 use crate::resource::DynamicResource;
-use crate::schema::Block;
 use crate::schema::Schema;
 
 use async_trait::async_trait;
@@ -37,7 +36,7 @@ pub trait Provider: Send + Sync + 'static {
         _ = diags;
         Some(Schema {
             version: 1,
-            block: Block::empty(),
+            block: Default::default(),
         })
     }
 
@@ -75,7 +74,7 @@ pub trait DynamicProvider: Send + Sync + 'static {
         _ = diags;
         Some(Schema {
             version: 1,
-            block: Block::empty(),
+            block: Default::default(),
         })
     }
 
@@ -135,5 +134,11 @@ impl<T: Provider> DynamicProvider for T {
         diags: &mut Diagnostics,
     ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>> {
         <T as Provider>::get_data_sources(self, diags)
+    }
+}
+
+impl<T: Provider + 'static> From<T> for Box<dyn DynamicProvider> {
+    fn from(value: T) -> Self {
+        Box::new(value)
     }
 }

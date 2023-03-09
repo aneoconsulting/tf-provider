@@ -255,3 +255,9 @@ impl<T: Resource> DynamicResource for T {
         RawValue::serialize(diags, &state)
     }
 }
+
+impl<T: Resource + 'static> From<T> for Box<dyn DynamicResource> {
+    fn from(value: T) -> Self {
+        Box::new(value)
+    }
+}

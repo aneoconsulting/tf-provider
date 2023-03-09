@@ -14,8 +14,8 @@ resource "null_resource" "pouet" {
 
 }
 
-resource "cmd_test" "test" {
-  dummy  = 3
-  dummy2 = null_resource.pouet.id
-  read "pouet" {}
+resource "cmd_local_exec" "test" {
+  read "pouet" {
+    cmd = "echo pouet"
+  }
 }
