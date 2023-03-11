@@ -8,7 +8,11 @@ use tf_provider::{
     NestedBlock, Resource, Schema, Value, ValueEmpty, ValueMap, ValueString,
 };
 
-pub struct CmdResource {}
+use crate::connection::Connection;
+
+pub struct CmdResource {
+    pub connection: Box<dyn Connection>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct State {

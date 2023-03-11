@@ -11,6 +11,7 @@ edition = "2021"
 path = "libs/tf-provider"
 
 [dependencies]
+async-process = "1.6"
 tonic = { version = "0.6", features = ["tls"] }
 prost = "0.9"
 futures = "0.3"
