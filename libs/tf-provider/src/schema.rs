@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt::Display, hash::Hash};
 
+use serde::{ser::SerializeMap, Serialize};
+
 use crate::tfplugin6;
 
 /// Specify if a description must interpreted as markdown or plain
@@ -219,71 +221,57 @@ pub enum AttributeType {
     Any,
 }
 
+impl Serialize for AttributeType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        struct AttributesAsType<'a>(&'a HashMap<String, Attribute>);
+        impl<'a> Serialize for AttributesAsType<'a> {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                let mut map = serializer.serialize_map(Some(self.0.len()))?;
+                for (name, attr) in self.0 {
+                    map.serialize_entry(name, &attr.attr_type)?;
+                }
+                map.end()
+            }
+        }
+        match self {
+            AttributeType::String => serializer.serialize_str("string"),
+            AttributeType::Number => serializer.serialize_str("number"),
+            AttributeType::Bool => serializer.serialize_str("bool"),
+            AttributeType::List(attr) => ("list", attr).serialize(serializer),
+            AttributeType::Set(attr) => ("set", attr).serialize(serializer),
+            AttributeType::Map(attr) => ("map", attr).serialize(serializer),
+            AttributeType::Object(attrs) => ("object", attrs).serialize(serializer),
+            AttributeType::Tuple(attrs) => ("tuple", attrs).serialize(serializer),
+            AttributeType::AttributeSingle(attrs) => {
+                ("object", &AttributesAsType(attrs)).serialize(serializer)
+            }
+            AttributeType::AttributeList(attrs) => {
+                ("list", ("object", &AttributesAsType(attrs))).serialize(serializer)
+            }
+            AttributeType::AttributeSet(attrs) => {
+                ("set", ("object", &AttributesAsType(attrs))).serialize(serializer)
+            }
+            AttributeType::AttributeMap(attrs) => {
+                ("map", ("object", &AttributesAsType(attrs))).serialize(serializer)
+            }
+            AttributeType::Any => serializer.serialize_str("dynamic"),
+        }
+    }
+}
+
 impl Display for AttributeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::String => f.write_str("\"string\""),
-            Self::Number => f.write_str("\"number\""),
-            Self::Bool => f.write_str("\"bool\""),
-            Self::List(attr_type) => f.write_fmt(format_args!("[\"list\",{}]", *attr_type)),
-            Self::Set(attr_type) => f.write_fmt(format_args!("[\"set\",{}]", *attr_type)),
-            Self::Map(attr_type) => f.write_fmt(format_args!("[\"map\",{}]", *attr_type)),
-            Self::Object(attr_types) => {
-                f.write_str("[\"object\",{")?;
-                let mut sep = "";
-                for (k, v) in attr_types {
-                    f.write_fmt(format_args!("{}\"{}\":{}", sep, k, v))?;
-                    sep = ",";
-                }
-                f.write_str("}]")
-            }
-            Self::Tuple(attr_types) => {
-                f.write_str("[\"tuple\",[")?;
-                let mut sep = "";
-                for e in attr_types {
-                    f.write_fmt(format_args!("{}{}", sep, e))?;
-                    sep = ",";
-                }
-                f.write_str("]]")
-            }
-            Self::AttributeSingle(attrs) => {
-                f.write_str("[\"object\",{")?;
-                let mut sep = "";
-                for (k, v) in attrs {
-                    f.write_fmt(format_args!("{}\"{}\":{}", sep, k, v.attr_type))?;
-                    sep = ",";
-                }
-                f.write_str("}]")
-            }
-            Self::AttributeList(attrs) => {
-                f.write_str("[\"list\",[\"object\",{")?;
-                let mut sep = "";
-                for (k, v) in attrs {
-                    f.write_fmt(format_args!("{}\"{}\":{}", sep, k, v.attr_type))?;
-                    sep = ",";
-                }
-                f.write_str("}]]")
-            }
-            Self::AttributeSet(attrs) => {
-                f.write_str("[\"set\",[\"object\",{")?;
-                let mut sep = "";
-                for (k, v) in attrs {
-                    f.write_fmt(format_args!("{}\"{}\":{}", sep, k, v.attr_type))?;
-                    sep = ",";
-                }
-                f.write_str("}]]")
-            }
-            Self::AttributeMap(attrs) => {
-                f.write_str("[\"map\",[\"object\",{")?;
-                let mut sep = "";
-                for (k, v) in attrs {
-                    f.write_fmt(format_args!("{}\"{}\":{}", sep, k, v.attr_type))?;
-                    sep = ",";
-                }
-                f.write_str("}]]")
-            }
-            Self::Any => f.write_str("\"dynamic\""),
-        }
+        return f.write_str(
+            serde_json::to_string(self)
+                .or(Err(std::fmt::Error))?
+                .as_str(),
+        );
     }
 }
 
