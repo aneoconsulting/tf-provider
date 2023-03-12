@@ -1,6 +1,8 @@
-use std::{collections::HashMap, marker::PhantomData};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
 use async_trait::async_trait;
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use tf_provider::{AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty};
@@ -20,10 +22,13 @@ pub struct CmdExecResource<T: Connection> {
 }
 
 #[async_trait]
-impl<T: Connection> Resource for CmdExecResource<T>
+impl<T> Resource for CmdExecResource<T>
 where
+    T: Connection,
     T: for<'e> Deserialize<'e>,
     T: Serialize,
+    T: Debug,
+    T: Clone,
 {
     type State = Value<State<T>>;
     type PrivateState = ValueEmpty;
@@ -126,10 +131,10 @@ where
 
     async fn plan(
         &self,
-        _diags: &mut Diagnostics,
-        _prior_state: Self::State,
+        diags: &mut Diagnostics,
+        prior_state: Self::State,
         proposed_state: Self::State,
-        _config_state: Self::State,
+        config_state: Self::State,
         prior_private_state: Self::PrivateState,
         _provider_meta_state: Self::ProviderMetaState,
     ) -> Option<(
@@ -137,7 +142,23 @@ where
         Self::PrivateState,
         Vec<tf_provider::attribute_path::AttributePath>,
     )> {
-        Some((proposed_state, prior_private_state, vec![]))
+        diags.root_warning("prior_state", format!("{:#?}", prior_state));
+        diags.root_warning("proposed_state", format!("{:#?}", proposed_state));
+        diags.root_warning("config_state", format!("{:#?}", config_state));
+
+        let state = match proposed_state {
+            Value::Value(proposed_state) => {
+                let mut state = proposed_state.clone();
+                if state.id.is_null() {
+                    state.id = Value::Unknown;
+                }
+                Value::Value(state)
+            }
+            Value::Null => Value::Null, // destruction
+            Value::Unknown => Value::Unknown,
+        };
+
+        Some((state, prior_private_state, vec![]))
         //Some((State::default().into(), prior_private_state, vec![]))
     }
 
@@ -150,6 +171,24 @@ where
         planned_private_state: Self::PrivateState,
         _provider_meta_state: Self::ProviderMetaState,
     ) -> Option<(Self::State, Self::PrivateState)> {
-        Some((planned_state, planned_private_state))
+        let state = match planned_state {
+            Value::Value(planned_state) => {
+                let mut state = planned_state.clone();
+                if !state.id.is_value() {
+                    state.id = Value::Value(
+                        thread_rng()
+                            .sample_iter(&Alphanumeric)
+                            .take(30)
+                            .map(char::from)
+                            .collect(),
+                    );
+                }
+                Value::Value(state)
+            }
+            Value::Null => Value::Null, // destruction
+            Value::Unknown => Value::Unknown,
+        };
+
+        Some((state, planned_private_state))
     }
 }

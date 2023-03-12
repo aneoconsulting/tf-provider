@@ -6,7 +6,7 @@ use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
 use crate::{cmd_exec_resource::CmdExecResource, connection::local::ConnectionLocal};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct CmdProvider {}
 
 #[async_trait]

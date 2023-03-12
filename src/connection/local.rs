@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Default, Clone)]
 pub struct ConnectionLocal {}
 
 impl From<Output> for ExecutionResult {
