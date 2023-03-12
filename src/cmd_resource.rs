@@ -1,29 +1,39 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use tf_provider::{
-    map, Attribute, AttributeConstraint, AttributeType, Block, Description, Diagnostics,
+    attribute_path::{AttributePath, AttributePathStep},
+    map, value, Attribute, AttributeConstraint, AttributeType, Block, Description, Diagnostics,
     NestedBlock, Resource, Schema, Value, ValueEmpty, ValueMap, ValueString,
 };
 
 use crate::connection::Connection;
 
-pub struct CmdResource {
-    pub connection: Box<dyn Connection>,
+#[derive(Debug, Default)]
+pub struct CmdResource<T: Connection> {
+    ph: PhantomData<T>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct State {
+pub struct State<T>
+where
+    T: Connection,
+    T: Serialize,
+    T: for<'a> Deserialize<'a>,
+{
     pub id: ValueString,
     pub inputs: ValueMap<ValueString>,
     pub state: ValueMap<ValueString>,
     pub read: HashMap<String, Value<StateRead>>,
+    #[serde(with = "value::serde_from_vec")]
     pub create: Value<StateCreate>,
+    #[serde(with = "value::serde_from_vec")]
     pub destroy: Value<StateDestroy>,
-    pub update: Vec<StateUpdate>,
-    pub connection: ValueEmpty,
+    pub update: Vec<Value<StateUpdate>>,
+    #[serde(with = "value::serde_from_vec")]
+    pub connection: Value<T>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -32,12 +42,35 @@ pub struct StateCmd {
     pub env: ValueMap<ValueString>,
 }
 
+impl StateCmd {
+    fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) -> Option<()> {
+        attr_path += AttributePathStep::Attribute("cmd".into());
+        match self.cmd {
+            Value::Value(_) => Some(()),
+            Value::Null => {
+                diags.error_short("`cmd` cannot be null", attr_path);
+                None
+            }
+            Value::Unknown => {
+                diags.warning("`cmd` is not known during planning", "It is recommended that the command does not depend on any resource, and use variables instead.", attr_path);
+                Some(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct StateUpdate {
-    pub cmd: ValueString,
-    pub env: ValueMap<ValueString>,
+    #[serde(flatten)]
+    pub cmd: StateCmd,
     pub triggers: ValueMap<ValueString>,
     pub reloads: ValueMap<ValueString>,
+}
+
+impl StateUpdate {
+    fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) -> Option<()> {
+        self.cmd.validate(diags, attr_path)
+    }
 }
 
 pub type StateRead = StateCmd;
@@ -45,8 +78,12 @@ pub type StateCreate = StateCmd;
 pub type StateDestroy = StateCmd;
 
 #[async_trait]
-impl Resource for CmdResource {
-    type State = Value<State>;
+impl<T: Connection> Resource for CmdResource<T>
+where
+    T: for<'e> Deserialize<'e>,
+    T: Serialize,
+{
+    type State = Value<State<T>>;
     type PrivateState = ValueEmpty;
     type ProviderMetaState = ValueEmpty;
 
@@ -98,7 +135,7 @@ impl Resource for CmdResource {
                         ),
                         ..Default::default()
                     }),
-                    "create" => NestedBlock::Group(Block {
+                    "create" => NestedBlock::Optional(Block {
                         attributes: map! {
                             "cmd" => cmd_attribute.clone(),
                             "env" => env_attribute.clone(),
@@ -108,7 +145,7 @@ impl Resource for CmdResource {
                         ),
                         ..Default::default()
                     }),
-                    "destroy" => NestedBlock::Group(Block {
+                    "destroy" => NestedBlock::Optional(Block {
                         attributes: map! {
                             "cmd" => cmd_attribute.clone(),
                             "env" => env_attribute.clone(),
@@ -144,7 +181,8 @@ impl Resource for CmdResource {
                         ),
                         ..Default::default()
                     }),
-                    "connection" => NestedBlock::Group(Block {
+                    "connection" => NestedBlock::Optional(Block {
+                        attributes: T::schema(),
                         description: Description::plain("Connection information"),
                         ..Default::default()
                     }),
@@ -155,7 +193,38 @@ impl Resource for CmdResource {
         })
     }
 
-    async fn validate(&self, _diags: &mut Diagnostics, _config: Self::State) -> Option<()> {
+    async fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()> {
+        let Value::Value(config) = config else {
+            return Some(());
+        };
+        if let Value::Value(connection) = config.connection {
+            _ = connection
+                .validate(
+                    diags,
+                    AttributePathStep::Attribute("connection".into()).into(),
+                )
+                .await?;
+        }
+        if let Value::Value(create) = config.create {
+            _ = create.validate(diags, AttributePathStep::Attribute("create".into()).into())
+        }
+        if let Value::Value(destroy) = config.destroy {
+            _ = destroy.validate(diags, AttributePathStep::Attribute("destroy".into()).into())
+        }
+        for (name, read) in config.read {
+            let mut attr_path: AttributePath = AttributePathStep::Attribute("read".into()).into();
+            attr_path.add_key(name);
+            if let Value::Value(read) = read {
+                _ = read.validate(diags, attr_path)?;
+            }
+        }
+        for (i, update) in config.update.into_iter().enumerate() {
+            let mut attr_path: AttributePath = AttributePathStep::Attribute("update".into()).into();
+            attr_path.add_index(i as i64);
+            if let Value::Value(update) = update {
+                _ = update.validate(diags, attr_path)?;
+            }
+        }
         Some(())
     }
 

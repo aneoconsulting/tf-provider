@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use tf_provider::Attribute;
+use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExecutionResult {
@@ -13,6 +13,8 @@ pub struct ExecutionResult {
 
 #[async_trait]
 pub trait Connection: Send + Sync + 'static {
+    const NAME: &'static str;
+
     /// execute a command over the connection
     async fn execute(
         &self,
@@ -20,9 +22,9 @@ pub trait Connection: Send + Sync + 'static {
         env: HashMap<Vec<u8>, Vec<u8>>,
     ) -> Result<ExecutionResult>;
 
-    /// Get the schema for the connection block
-    fn schema(&self) -> HashMap<String, Attribute>;
+    /// Validate the state is valid
+    async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) -> Option<()>;
 
-    /// Get the name of the connection type
-    fn name(&self) -> String;
+    /// Get the schema for the connection block
+    fn schema() -> HashMap<String, Attribute>;
 }

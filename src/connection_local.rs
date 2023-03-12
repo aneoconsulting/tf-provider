@@ -4,8 +4,10 @@ use crate::connection::{Connection, ExecutionResult};
 use anyhow::{anyhow, Result};
 use async_process::{Command, Output};
 use async_trait::async_trait;
-use tf_provider::Attribute;
+use serde::{Deserialize, Serialize};
+use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ConnectionLocal {}
 
 impl From<Output> for ExecutionResult {
@@ -20,6 +22,8 @@ impl From<Output> for ExecutionResult {
 
 #[async_trait]
 impl Connection for ConnectionLocal {
+    const NAME: &'static str = "local";
+
     async fn execute(
         &self,
         cmd: Vec<Vec<u8>>,
@@ -42,11 +46,12 @@ impl Connection for ConnectionLocal {
         }
     }
 
-    fn schema(&self) -> HashMap<String, Attribute> {
-        Default::default()
+    /// Validate the state is valid
+    async fn validate(&self, _diags: &mut Diagnostics, _attr_path: AttributePath) -> Option<()> {
+        Some(())
     }
 
-    fn name(&self) -> String {
-        "local".into()
+    fn schema() -> HashMap<String, Attribute> {
+        Default::default()
     }
 }

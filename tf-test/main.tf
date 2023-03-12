@@ -15,7 +15,12 @@ resource "null_resource" "pouet" {
 }
 
 resource "cmd_local_exec" "test" {
+
+  create {
+    cmd = null
+  }
+
   read "pouet" {
-    cmd = "echo pouet"
+    cmd = null_resource.pouet.id
   }
 }

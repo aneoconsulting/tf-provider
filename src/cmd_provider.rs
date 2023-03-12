@@ -47,7 +47,7 @@ impl Provider for CmdProvider {
     ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::resource::DynamicResource>>>
     {
         Some(map! {
-            "local_exec" => CmdResource { connection: Box::new(ConnectionLocal{}) },
+            "local_exec" => CmdResource::<ConnectionLocal>::default(),
         })
     }
 

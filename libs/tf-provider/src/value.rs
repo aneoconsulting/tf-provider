@@ -56,6 +56,46 @@ pub type ValueList<T> = Value<Vec<T>>;
 pub type ValueSet<T> = Value<HashSet<T>>;
 pub type ValueMap<T> = Value<HashMap<String, T>>;
 
+pub mod serde_from_vec {
+    use anyhow::anyhow;
+    use serde::{de::Error, ser::SerializeSeq, Deserialize, Serialize};
+
+    use super::Value;
+
+    /// Serialize a nullable Value into a Vec of Values with 0 or 1 element
+    pub fn serialize<T, S>(value: &Value<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+        T: Serialize,
+    {
+        let mut seq = serializer.serialize_seq(Some(value.is_value() as usize))?;
+        if let Value::Value(value) = value {
+            seq.serialize_element(value)?;
+        }
+        seq.end()
+    }
+
+    /// Deserialize a Vec of values into a single, nullable, Value
+    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<Value<T>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        let vec: Vec<Value<T>> = Deserialize::deserialize(deserializer)?;
+        let mut iter = vec.into_iter();
+        if let Some(value) = iter.next() {
+            if iter.next().is_none() {
+                Ok(value)
+            } else {
+                Err(anyhow!("Try to store multiple elements in a single Value"))
+                    .map_err(D::Error::custom)
+            }
+        } else {
+            Ok(Value::Null)
+        }
+    }
+}
+
 impl<T> Value<T> {
     /////////////////////////////////////////////////////////////////////////
     // Querying the contained values

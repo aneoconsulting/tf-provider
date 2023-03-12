@@ -77,6 +77,12 @@ impl std::ops::Add<AttributePathStep> for AttributePath {
     }
 }
 
+impl From<AttributePathStep> for AttributePath {
+    fn from(value: AttributePathStep) -> Self {
+        Self { steps: vec![value] }
+    }
+}
+
 impl From<AttributePath> for tfplugin6::AttributePath {
     fn from(value: AttributePath) -> Self {
         Self {

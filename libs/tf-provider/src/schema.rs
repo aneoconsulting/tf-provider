@@ -56,7 +56,7 @@ where
 /// NestedBlock
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum NestedBlock {
-    /// The nested block can appear at most once
+    /// The nested block must appear exactly once
     Single(Block),
     /// The nested block can appear multiple times
     List(Block),
@@ -66,6 +66,24 @@ pub enum NestedBlock {
     Map(Block),
     /// The nested block can appear at most once (if not given, it will be populate with Nulls)
     Group(Block),
+    /// The nested block can appear at most once (if not given, it will be null)
+    /// This is implemented with a list block, and must be serialized with `value::serde_from_vec`
+    /// ```
+    /// use tf_plugin::{value, Value};
+    ///
+    /// #[derive(Serialize, Deserialize)]
+    /// struct MyBlock {
+    ///   /* ... */
+    /// }
+    ///
+    /// #[derive(Serialize, Deserialize)]
+    /// struct MyState {
+    ///   #[serde(with = "value::serde_from_vec")]
+    ///   my_block: Value<MyBlock>,
+    /// }
+    ///
+    /// ```
+    Optional(Block),
 }
 
 /// Block
@@ -102,18 +120,22 @@ fn cvt_nested_blocks_tf6(
     use tfplugin6::schema::nested_block::NestingMode;
     blocks
         .iter()
-        .map(|(name, block)| {
-            let (nesting_mode, block) = match block {
+        .map(|(name, nested_block)| {
+            let (nesting_mode, block) = match nested_block {
                 NestedBlock::Single(block) => (NestingMode::Single, block),
                 NestedBlock::List(block) => (NestingMode::List, block),
                 NestedBlock::Set(block) => (NestingMode::Set, block),
                 NestedBlock::Map(block) => (NestingMode::Map, block),
                 NestedBlock::Group(block) => (NestingMode::Group, block),
+                NestedBlock::Optional(block) => (NestingMode::List, block),
             };
-            let nitems = match nesting_mode {
-                NestingMode::Single => (1, 1),
-                NestingMode::List | NestingMode::Set => (0, i64::MAX),
-                _ => (0, 0),
+            let nitems = match nested_block {
+                NestedBlock::Single(_) => (1, 1),
+                NestedBlock::List(_) => (0, i64::MAX),
+                NestedBlock::Set(_) => (0, i64::MAX),
+                NestedBlock::Map(_) => (0, 0),
+                NestedBlock::Group(_) => (0, 0),
+                NestedBlock::Optional(_) => (0, 1),
             };
             tfplugin6::schema::NestedBlock {
                 type_name: name.clone(),
