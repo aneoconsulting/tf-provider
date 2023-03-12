@@ -11,7 +11,7 @@ use tf_provider::{
 };
 
 #[derive(Debug, Default)]
-pub struct CmdResource<T: Connection> {
+pub struct CmdExecResource<T: Connection> {
     ph: PhantomData<T>,
 }
 
@@ -121,7 +121,7 @@ pub type StateCreate = StateCmd;
 pub type StateDestroy = StateCmd;
 
 #[async_trait]
-impl<T: Connection> Resource for CmdResource<T>
+impl<T: Connection> Resource for CmdExecResource<T>
 where
     T: for<'e> Deserialize<'e>,
     T: Serialize,

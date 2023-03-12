@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
-use crate::{cmd_resource::CmdResource, connection_local::ConnectionLocal};
+use crate::{cmd_exec_resource::CmdExecResource, connection::local::ConnectionLocal};
 
 #[derive(Debug, Default)]
 pub struct CmdProvider {}
@@ -47,7 +47,7 @@ impl Provider for CmdProvider {
     ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::resource::DynamicResource>>>
     {
         Some(map! {
-            "local_exec" => CmdResource::<ConnectionLocal>::default(),
+            "local_exec" => CmdExecResource::<ConnectionLocal>::default(),
         })
     }
 

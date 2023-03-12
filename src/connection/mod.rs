@@ -4,6 +4,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
+pub mod local;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExecutionResult {
     pub status: i32,
