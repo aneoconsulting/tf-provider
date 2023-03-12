@@ -9,38 +9,51 @@ pub struct AttributePath {
 }
 
 impl AttributePath {
+    /// Create a new attribute path with the `root` attribute
+    pub fn new<T: ToString>(root: T) -> Self {
+        Self {
+            steps: vec![AttributePathStep::Attribute(root.to_string())],
+        }
+    }
+    /// Create a new attribute path where the attribute `.name` has been appended
+    pub fn attribute<T: ToString>(mut self, name: T) -> Self {
+        self.add_attribute(name);
+        self
+    }
+    /// Create a new attribute path where the access `["key"]` has been appended
+    pub fn key<T: ToString>(mut self, key: T) -> Self {
+        self.add_key(key);
+        self
+    }
+    /// Create a new attribute path where the access `[idx]` has been appended
+    pub fn index<T: Into<i64>>(mut self, idx: T) -> Self {
+        self.add_index(idx);
+        self
+    }
+
     /// add name access to the path (ie: `.name`)
-    pub fn add_attribute<T>(&mut self, name: T) -> &mut Self
-    where
-        T: ToString,
-    {
+    pub fn add_attribute<T: ToString>(&mut self, name: T) -> &mut Self {
         self.steps
             .push(AttributePathStep::Attribute(name.to_string()));
         self
     }
     /// add key access to the path (ie: `["key"]`)
-    pub fn add_key<T>(&mut self, key: T) -> &mut Self
-    where
-        T: ToString,
-    {
+    pub fn add_key<T: ToString>(&mut self, key: T) -> &mut Self {
         self.steps.push(AttributePathStep::Key(key.to_string()));
         self
     }
     /// add index access to the path (ie: `[idx]`)
-    pub fn add_index<T>(&mut self, idx: T) -> &mut Self
-    where
-        T: Into<i64>,
-    {
+    pub fn add_index<T: Into<i64>>(&mut self, idx: T) -> &mut Self {
         self.steps.push(AttributePathStep::Index(idx.into()));
         self
     }
     /// Add step to the path
-    pub fn add_step<T>(&mut self, step: AttributePathStep) -> &mut Self {
+    pub fn add_step(&mut self, step: AttributePathStep) -> &mut Self {
         self.steps.push(step);
         self
     }
     /// Add multiple steps into the path
-    pub fn add_steps<T>(&mut self, mut steps: AttributePath) -> &mut Self {
+    pub fn add_steps(&mut self, mut steps: AttributePath) -> &mut Self {
         self.steps.append(&mut steps.steps);
         self
     }

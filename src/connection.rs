@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ffi::OsString};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -18,8 +18,8 @@ pub trait Connection: Send + Sync + 'static {
     /// execute a command over the connection
     async fn execute(
         &self,
-        cmd: Vec<Vec<u8>>,
-        env: HashMap<Vec<u8>, Vec<u8>>,
+        cmd: OsString,
+        env: HashMap<OsString, OsString>,
     ) -> Result<ExecutionResult>;
 
     /// Validate the state is valid

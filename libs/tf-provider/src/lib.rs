@@ -16,6 +16,7 @@ mod tfplugin6 {
     tonic::include_proto!("tfplugin6");
 }
 
+pub use attribute_path::AttributePath;
 pub use data_source::DataSource;
 pub use diagnostics::Diagnostics;
 pub use provider::Provider;

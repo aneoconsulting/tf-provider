@@ -4,9 +4,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use tf_provider::{
-    attribute_path::{AttributePath, AttributePathStep},
-    map, value, Attribute, AttributeConstraint, AttributeType, Block, Description, Diagnostics,
-    NestedBlock, Resource, Schema, Value, ValueEmpty, ValueMap, ValueString,
+    map, value, Attribute, AttributeConstraint, AttributePath, AttributeType, Block, Description,
+    Diagnostics, NestedBlock, Resource, Schema, Value, ValueEmpty, ValueList, ValueMap,
+    ValueString,
 };
 
 use crate::connection::Connection;
@@ -31,7 +31,7 @@ where
     pub create: Value<StateCreate>,
     #[serde(with = "value::serde_as_vec")]
     pub destroy: Value<StateDestroy>,
-    pub update: Vec<Value<StateUpdate>>,
+    pub update: ValueList<Value<StateUpdate>>,
     #[serde(with = "value::serde_as_vec")]
     pub connection: Value<T>,
 }
@@ -44,7 +44,7 @@ pub struct StateCmd {
 
 impl StateCmd {
     fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) -> Option<()> {
-        attr_path += AttributePathStep::Attribute("cmd".into());
+        attr_path.add_attribute("cmd");
         match self.cmd {
             Value::Value(_) => Some(()),
             Value::Null => {
@@ -69,7 +69,55 @@ pub struct StateUpdate {
 
 impl StateUpdate {
     fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) -> Option<()> {
-        self.cmd.validate(diags, attr_path)
+        self.cmd.validate(diags, attr_path.clone())?;
+        for (name, map) in [("triggers", &self.triggers), ("reloads", &self.reloads)] {
+            let attr_path = attr_path.clone().attribute(name);
+            match map {
+                Value::Value(map) => {
+                    for (k, v) in map {
+                        let attr_path = attr_path.clone().key(k);
+                        match v {
+                            Value::Value(v) => {
+                                if v.len() == 0 {
+                                    diags.error(
+                                        format!("Element of `{}` is empty", name),
+                                        format!("Elements of `{}` cannot be empty.", name),
+                                        attr_path,
+                                    );
+                                    return None;
+                                }
+                            }
+                            Value::Null => {
+                                diags.error(
+                                    format!("Element of `{}` is null", name),
+                                    format!("Elements of `{}` cannot be null.", name),
+                                    attr_path,
+                                );
+                                return None;
+                            }
+                            Value::Unknown => {
+                                diags.error(
+                                    format!("Element of `{}` is not known during planning", name),
+                                    format!("Elements of `{}` cannot be unkown.", name),
+                                    attr_path,
+                                );
+                                return None;
+                            }
+                        }
+                    }
+                }
+                Value::Null => (),
+                Value::Unknown => {
+                    diags.error(
+                        format!("`{}` is not known during planning", name),
+                        format!("`{}` cannot be unkown.", name),
+                        attr_path,
+                    );
+                    return None;
+                }
+            }
+        }
+        Some(())
     }
 }
 
@@ -199,32 +247,39 @@ where
         };
         if let Value::Value(connection) = config.connection {
             _ = connection
-                .validate(
-                    diags,
-                    AttributePathStep::Attribute("connection".into()).into(),
-                )
+                .validate(diags, AttributePath::new("connection"))
                 .await?;
         }
         if let Value::Value(create) = config.create {
-            _ = create.validate(diags, AttributePathStep::Attribute("create".into()).into())
+            _ = create.validate(diags, AttributePath::new("create"))
         }
         if let Value::Value(destroy) = config.destroy {
-            _ = destroy.validate(diags, AttributePathStep::Attribute("destroy".into()).into())
+            _ = destroy.validate(diags, AttributePath::new("destroy"))
         }
         for (name, read) in config.read {
-            let mut attr_path: AttributePath = AttributePathStep::Attribute("read".into()).into();
-            attr_path.add_key(name);
             if let Value::Value(read) = read {
-                _ = read.validate(diags, attr_path)?;
+                _ = read.validate(diags, AttributePath::new("read").key(name))?;
             }
         }
-        for (i, update) in config.update.into_iter().enumerate() {
-            let mut attr_path: AttributePath = AttributePathStep::Attribute("update".into()).into();
-            attr_path.add_index(i as i64);
-            if let Value::Value(update) = update {
-                _ = update.validate(diags, attr_path)?;
+        match config.update {
+            Value::Value(update) => {
+                for (i, update) in update.into_iter().enumerate() {
+                    if let Value::Value(update) = update {
+                        _ = update.validate(diags, AttributePath::new("update").index(i as i64))?;
+                    }
+                }
+            }
+            Value::Null => (),
+            Value::Unknown => {
+                diags.error(
+                    "`update` blocks are unknown during plan.",
+                    "All `update` blocks must be known during plan.",
+                    AttributePath::new("update"),
+                );
+                return None;
             }
         }
+
         Some(())
     }
 

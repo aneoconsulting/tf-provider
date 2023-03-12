@@ -16,8 +16,17 @@ resource "null_resource" "pouet" {
 
 resource "cmd_local_exec" "test" {
 
-  create {
-    cmd = null
+  dynamic "read" {
+    for_each = null_resource.pouet.id != null ? {} : {}
+    labels   = ["pouet"]
+    content {
+      cmd = "echo pouet"
+    }
+  }
+
+  update {
+    cmd      = "echo update"
+    triggers = null_resource.pouet.id != null ? {} : {}
   }
 
   read "pouet" {

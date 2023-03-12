@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ffi::OsString};
 
 use crate::connection::{Connection, ExecutionResult};
 use anyhow::{anyhow, Result};
@@ -26,18 +26,13 @@ impl Connection for ConnectionLocal {
 
     async fn execute(
         &self,
-        cmd: Vec<Vec<u8>>,
-        env: HashMap<Vec<u8>, Vec<u8>>,
+        cmd: OsString,
+        env: HashMap<OsString, OsString>,
     ) -> Result<ExecutionResult> {
         if cmd.len() > 0 {
-            let (cmd, args) = (&cmd[0], &cmd[1..]);
-            let mut command = Command::new(std::str::from_utf8(cmd.as_slice())?);
-            for arg in args {
-                command.arg(std::str::from_utf8(arg.as_slice())?);
-            }
+            let mut command = Command::new("sh");
+            command.arg("-c").arg(cmd);
             for (k, v) in env {
-                let k = std::str::from_utf8(k.as_slice())?;
-                let v = std::str::from_utf8(v.as_slice())?;
                 command.env(k, v);
             }
             Ok(command.output().await?.into())
