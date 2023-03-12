@@ -11,7 +11,11 @@ impl WithValidate for super::state::StateCmd {
     async fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) {
         attr_path.add_attribute("cmd");
         match self.cmd {
-            Value::Value(_) => (),
+            Value::Value(ref cmd) => {
+                if cmd.len() == 0 {
+                    diags.error_short("`cmd` cannot be empty", attr_path);
+                }
+            }
             Value::Null => {
                 diags.error_short("`cmd` cannot be null", attr_path);
             }
