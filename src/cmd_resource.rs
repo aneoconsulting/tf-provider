@@ -27,12 +27,12 @@ where
     pub inputs: ValueMap<ValueString>,
     pub state: ValueMap<ValueString>,
     pub read: HashMap<String, Value<StateRead>>,
-    #[serde(with = "value::serde_from_vec")]
+    #[serde(with = "value::serde_as_vec")]
     pub create: Value<StateCreate>,
-    #[serde(with = "value::serde_from_vec")]
+    #[serde(with = "value::serde_as_vec")]
     pub destroy: Value<StateDestroy>,
     pub update: Vec<Value<StateUpdate>>,
-    #[serde(with = "value::serde_from_vec")]
+    #[serde(with = "value::serde_as_vec")]
     pub connection: Value<T>,
 }
 

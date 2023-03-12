@@ -56,7 +56,7 @@ pub type ValueList<T> = Value<Vec<T>>;
 pub type ValueSet<T> = Value<HashSet<T>>;
 pub type ValueMap<T> = Value<HashMap<String, T>>;
 
-pub mod serde_from_vec {
+pub mod serde_as_vec {
     use anyhow::anyhow;
     use serde::{de::Error, ser::SerializeSeq, Deserialize, Serialize};
 
