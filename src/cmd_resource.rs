@@ -26,7 +26,7 @@ where
     pub id: ValueString,
     pub inputs: ValueMap<ValueString>,
     pub state: ValueMap<ValueString>,
-    pub read: HashMap<String, Value<StateRead>>,
+    pub read: ValueMap<Value<StateRead>>,
     #[serde(with = "value::serde_as_vec")]
     pub create: Value<StateCreate>,
     #[serde(with = "value::serde_as_vec")]
@@ -43,17 +43,15 @@ pub struct StateCmd {
 }
 
 impl StateCmd {
-    fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) -> Option<()> {
+    fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) {
         attr_path.add_attribute("cmd");
         match self.cmd {
-            Value::Value(_) => Some(()),
+            Value::Value(_) => (),
             Value::Null => {
                 diags.error_short("`cmd` cannot be null", attr_path);
-                None
             }
             Value::Unknown => {
                 diags.warning("`cmd` is not known during planning", "It is recommended that the command does not depend on any resource, and use variables instead.", attr_path);
-                Some(())
             }
         }
     }
@@ -68,8 +66,8 @@ pub struct StateUpdate {
 }
 
 impl StateUpdate {
-    fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) -> Option<()> {
-        self.cmd.validate(diags, attr_path.clone())?;
+    fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
+        _ = self.cmd.validate(diags, attr_path.clone());
         for (name, map) in [("triggers", &self.triggers), ("reloads", &self.reloads)] {
             let attr_path = attr_path.clone().attribute(name);
             match map {
@@ -80,28 +78,28 @@ impl StateUpdate {
                             Value::Value(v) => {
                                 if v.len() == 0 {
                                     diags.error(
-                                        format!("Element of `{}` is empty", name),
-                                        format!("Elements of `{}` cannot be empty.", name),
+                                        format!("Element of `update.{}` is empty", name),
+                                        format!("Elements of `update.{}` cannot be empty.", name),
                                         attr_path,
                                     );
-                                    return None;
                                 }
                             }
                             Value::Null => {
                                 diags.error(
-                                    format!("Element of `{}` is null", name),
-                                    format!("Elements of `{}` cannot be null.", name),
+                                    format!("Element of `update.{}` is null", name),
+                                    format!("Elements of `update.{}` cannot be null.", name),
                                     attr_path,
                                 );
-                                return None;
                             }
                             Value::Unknown => {
                                 diags.error(
-                                    format!("Element of `{}` is not known during planning", name),
-                                    format!("Elements of `{}` cannot be unkown.", name),
+                                    format!(
+                                        "Element of `update.{}` is not known during planning",
+                                        name
+                                    ),
+                                    format!("Elements of `update.{}` cannot be unkown.", name),
                                     attr_path,
                                 );
-                                return None;
                             }
                         }
                     }
@@ -109,15 +107,13 @@ impl StateUpdate {
                 Value::Null => (),
                 Value::Unknown => {
                     diags.error(
-                        format!("`{}` is not known during planning", name),
-                        format!("`{}` cannot be unkown.", name),
+                        format!("`update.{}` is not known during planning", name),
+                        format!("`update.{}` cannot be unkown.", name),
                         attr_path,
                     );
-                    return None;
                 }
             }
         }
-        Some(())
     }
 }
 
@@ -256,16 +252,29 @@ where
         if let Value::Value(destroy) = config.destroy {
             _ = destroy.validate(diags, AttributePath::new("destroy"))
         }
-        for (name, read) in config.read {
-            if let Value::Value(read) = read {
-                _ = read.validate(diags, AttributePath::new("read").key(name))?;
+        match config.read {
+            Value::Value(read) => {
+                let attr_path = AttributePath::new("read");
+                for (name, read) in read {
+                    if let Value::Value(read) = read {
+                        _ = read.validate(diags, attr_path.clone().key(name));
+                    }
+                }
+            }
+            Value::Null => (),
+            Value::Unknown => {
+                diags.error(
+                    "`read` blocks are unknown during plan.",
+                    "All `read` blocks must be known during plan.",
+                    AttributePath::new("read"),
+                );
             }
         }
         match config.update {
             Value::Value(update) => {
                 for (i, update) in update.into_iter().enumerate() {
                     if let Value::Value(update) = update {
-                        _ = update.validate(diags, AttributePath::new("update").index(i as i64))?;
+                        _ = update.validate(diags, AttributePath::new("update").index(i as i64));
                     }
                 }
             }
@@ -276,11 +285,14 @@ where
                     "All `update` blocks must be known during plan.",
                     AttributePath::new("update"),
                 );
-                return None;
             }
         }
 
-        Some(())
+        if diags.errors.len() == 0 {
+            Some(())
+        } else {
+            None
+        }
     }
 
     async fn read(

@@ -17,7 +17,7 @@ resource "null_resource" "pouet" {
 resource "cmd_local_exec" "test" {
 
   dynamic "read" {
-    for_each = null_resource.pouet.id != null ? {} : {}
+    for_each = { (null_resource.pouet.id) : "pouet" }
     labels   = ["pouet"]
     content {
       cmd = "echo pouet"
@@ -26,9 +26,8 @@ resource "cmd_local_exec" "test" {
 
   update {
     cmd      = "echo update"
-    triggers = null_resource.pouet.id != null ? {} : {}
+    triggers = { a = "a", (null_resource.pouet.id) : "pouet" }
   }
-
   read "pouet" {
     cmd = null_resource.pouet.id
   }

@@ -12,7 +12,7 @@ pub struct ExecutionResult {
 }
 
 #[async_trait]
-pub trait Connection: Send + Sync + 'static {
+pub trait Connection: Send + Sync + 'static + Default {
     const NAME: &'static str;
 
     /// execute a command over the connection
