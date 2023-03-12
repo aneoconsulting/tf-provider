@@ -3,13 +3,12 @@ use std::{collections::HashMap, marker::PhantomData};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use crate::connection::Connection;
 use tf_provider::{
     map, value, Attribute, AttributeConstraint, AttributePath, AttributeType, Block, Description,
     Diagnostics, NestedBlock, Resource, Schema, Value, ValueEmpty, ValueList, ValueMap,
     ValueString,
 };
-
-use crate::connection::Connection;
 
 #[derive(Debug, Default)]
 pub struct CmdResource<T: Connection> {
@@ -297,11 +296,78 @@ where
 
     async fn read(
         &self,
-        _diags: &mut Diagnostics,
+        diags: &mut Diagnostics,
         state: Self::State,
         private_state: Self::PrivateState,
         _provider_meta_state: Self::ProviderMetaState,
     ) -> Option<(Self::State, Self::PrivateState)> {
+        let mut state = state;
+        if let Value::Value(ref mut state) = state {
+            let connection_default = Default::default();
+            let connection = state.connection.as_ref().unwrap_or(&connection_default);
+
+            if let Value::Value(ref reads) = state.read {
+                let mut outputs = if let Value::Value(state) = std::mem::take(&mut state.state) {
+                    state
+                } else {
+                    HashMap::with_capacity(reads.len())
+                };
+                let attr_path = AttributePath::new("read");
+
+                for (name, read) in reads {
+                    if let Value::Value(read) = read {
+                        let attr_path = attr_path.clone().key(name).key("cmd");
+
+                        let default_env = HashMap::default();
+                        let cmd = read.cmd.as_ref().map(|v| v.into()).unwrap_or_default();
+                        let env = read
+                            .env
+                            .as_ref()
+                            .unwrap_or(&default_env)
+                            .iter()
+                            .map(|(k, v)| {
+                                (k.into(), v.as_ref().map(|v| v.into()).unwrap_or_default())
+                            })
+                            .collect();
+
+                        match connection.execute(cmd, env).await {
+                            Ok(res) => {
+                                if res.status == 0 {
+                                    if res.stderr.len() > 0 {
+                                        diags.warning(
+                                            "`read` succeeded but stderr was not empty",
+                                            std::str::from_utf8(res.stderr.as_slice())
+                                                .unwrap_or("<stderr is not a valid utf-8 and cannot be printed>"),
+                                            attr_path.clone(),
+                                        );
+                                    }
+
+                                    match std::str::from_utf8(res.stdout.as_slice()) {
+                                        Ok(stdout) => {
+                                            _ = outputs
+                                                .insert(name.clone(), Value::Value(stdout.into()));
+                                        }
+                                        Err(err) => diags.error("`read` succeeded, but stdout was not a valid utf-8 string", err, attr_path.clone())
+                                    }
+                                } else {
+                                    diags.error(
+                                        format!("`read` failed with status code: {}", res.status),
+                                        std::str::from_utf8(res.stderr.as_slice()).unwrap_or(
+                                            "<stderr is not a valid utf-8 and cannot be printed>",
+                                        ),
+                                        attr_path,
+                                    );
+                                }
+                            }
+                            Err(err) => {
+                                diags.error("Failed to read resource state", err, attr_path);
+                            }
+                        };
+                    }
+                }
+                state.state = Value::Value(outputs);
+            }
+        }
         Some((state, private_state))
     }
 
