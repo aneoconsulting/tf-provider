@@ -1,16 +1,16 @@
-use std::{collections::HashMap, ffi::OsString};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
+use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics, ValueString};
 
 pub mod local;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExecutionResult {
     pub status: i32,
-    pub stdout: Vec<u8>,
-    pub stderr: Vec<u8>,
+    pub stdout: String,
+    pub stderr: String,
 }
 
 #[async_trait]
@@ -20,8 +20,8 @@ pub trait Connection: Send + Sync + 'static + Default {
     /// execute a command over the connection
     async fn execute(
         &self,
-        cmd: OsString,
-        env: HashMap<OsString, OsString>,
+        cmd: &str,
+        env: &HashMap<String, ValueString>,
     ) -> Result<ExecutionResult>;
 
     /// Validate the state is valid

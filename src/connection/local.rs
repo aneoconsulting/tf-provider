@@ -1,22 +1,23 @@
-use std::{collections::HashMap, ffi::OsString};
+use std::collections::HashMap;
 
 use crate::connection::{Connection, ExecutionResult};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use async_process::{Command, Output};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
+use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics, Value, ValueString};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Default, Clone)]
 pub struct ConnectionLocal {}
 
-impl From<Output> for ExecutionResult {
-    fn from(value: Output) -> Self {
-        Self {
-            status: value.status.code().unwrap_or(0x7fffffff),
-            stdout: value.stdout,
-            stderr: value.stderr,
-        }
+impl TryFrom<Output> for ExecutionResult {
+    type Error = Error;
+    fn try_from(value: Output) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            status: value.status.code().ok_or(anyhow!("invalid status code"))?,
+            stdout: String::from_utf8(value.stdout)?,
+            stderr: String::from_utf8(value.stderr)?,
+        })
     }
 }
 
@@ -26,16 +27,24 @@ impl Connection for ConnectionLocal {
 
     async fn execute(
         &self,
-        cmd: OsString,
-        env: HashMap<OsString, OsString>,
+        cmd: &str,
+        env: &HashMap<String, ValueString>,
     ) -> Result<ExecutionResult> {
         if cmd.len() > 0 {
             let mut command = Command::new("sh");
             command.arg("-c").arg(cmd);
             for (k, v) in env {
-                command.env(k, v);
+                match v {
+                    Value::Value(v) => {
+                        command.env(k, v);
+                    }
+                    Value::Null => {
+                        command.env(k, "");
+                    }
+                    Value::Unknown => (),
+                }
             }
-            Ok(command.output().await?.into())
+            Ok(command.output().await?.try_into()?)
         } else {
             Err(anyhow!("Command must not be empty"))
         }
