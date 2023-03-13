@@ -123,6 +123,11 @@ where
             }
             state.state = Value::Value(outputs);
         }
+
+        if state.inputs.is_null() {
+            state.inputs = Value::Value(Default::default());
+        }
+
         Some((state, private_state))
     }
 
@@ -138,6 +143,10 @@ where
 
         let mut state = proposed_state.clone();
         state.id = Value::Unknown;
+
+        if state.inputs.is_null() {
+            state.inputs = Value::Value(Default::default());
+        }
 
         Some((state, Default::default()))
     }
@@ -161,6 +170,9 @@ where
         let mut state = proposed_state.clone();
         if state.id.is_null() {
             state.id = Value::Unknown;
+        }
+        if state.inputs.is_null() {
+            state.inputs = Value::Value(Default::default());
         }
 
         Some((state, prior_private_state, vec![]))
@@ -186,14 +198,15 @@ where
         _provider_meta_state: Self::ProviderMetaState,
     ) -> Option<(Self::State, Self::PrivateState)> {
         let mut state = planned_state.clone();
-        if !state.id.is_value() {
-            state.id = Value::Value(
-                thread_rng()
-                    .sample_iter(&Alphanumeric)
-                    .take(30)
-                    .map(char::from)
-                    .collect(),
-            );
+        state.id = Value::Value(
+            thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(30)
+                .map(char::from)
+                .collect(),
+        );
+        if !state.inputs.is_value() {
+            state.inputs = Value::Value(Default::default());
         }
 
         Some((state, planned_private_state))
@@ -216,6 +229,9 @@ where
                     .map(char::from)
                     .collect(),
             );
+        }
+        if !state.inputs.is_value() {
+            state.inputs = Value::Value(Default::default());
         }
 
         Some((state, planned_private_state))
