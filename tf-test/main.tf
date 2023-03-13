@@ -17,7 +17,7 @@ resource "null_resource" "pouet" {
 resource "cmd_local_exec" "test" {
 
   read "pouet" {
-    cmd = "false"
+    cmd = "echo pouet"
   }
 }
 

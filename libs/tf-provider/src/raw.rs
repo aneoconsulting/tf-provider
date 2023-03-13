@@ -7,7 +7,16 @@ pub enum RawValue {
     Json(Vec<u8>),
 }
 
+const NULL_MESSAGE_PACK: [u8; 1] = [0xc0_u8];
+const NULL_JSON: &str = "null";
+
 impl RawValue {
+    pub fn is_null(&self) -> bool {
+        match self {
+            RawValue::MessagePack(mp) => mp.len() == 0 || mp.as_slice() == &NULL_MESSAGE_PACK,
+            RawValue::Json(json) => json.len() == 0 || json.as_slice() == NULL_JSON.as_bytes(),
+        }
+    }
     pub fn deserialize<T>(&self, diags: &mut Diagnostics) -> Option<T>
     where
         T: DeserializeOwned,
@@ -15,7 +24,7 @@ impl RawValue {
         match self {
             Self::MessagePack(mp) => {
                 let slice = if mp.is_empty() {
-                    &[0xc0_u8] // null MessagePack
+                    &NULL_MESSAGE_PACK
                 } else {
                     mp.as_slice()
                 };
@@ -29,7 +38,7 @@ impl RawValue {
             }
             Self::Json(json) => {
                 let slice = if json.is_empty() {
-                    "null".as_bytes()
+                    NULL_JSON.as_bytes()
                 } else {
                     json.as_slice()
                 };
@@ -86,5 +95,11 @@ impl From<RawValue> for tfplugin6::DynamicValue {
                 json,
             },
         }
+    }
+}
+
+impl Default for RawValue {
+    fn default() -> Self {
+        RawValue::MessagePack(NULL_MESSAGE_PACK.to_vec())
     }
 }

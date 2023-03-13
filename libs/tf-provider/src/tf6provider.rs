@@ -209,16 +209,58 @@ impl tf::provider_server::Provider for Arc<Server> {
             request.config,
             request.provider_meta,
         ) {
-            resource
-                .plan(
-                    &mut diags,
-                    prior_state.into(),
-                    proposed_state.into(),
-                    config_state.into(),
-                    request.prior_private,
-                    provider_meta_state.into(),
-                )
-                .await
+            let prior_state = RawValue::from(prior_state);
+            let proposed_state = RawValue::from(proposed_state);
+            let config_state = RawValue::from(config_state);
+
+            match (
+                prior_state.is_null(),
+                proposed_state.is_null(),
+                config_state.is_null(),
+            ) {
+                (false, false, false) => {
+                    resource
+                        .plan_update(
+                            &mut diags,
+                            prior_state,
+                            proposed_state,
+                            config_state,
+                            request.prior_private,
+                            provider_meta_state.into(),
+                        )
+                        .await
+                }
+                (false, true, true) => {
+                    resource
+                        .plan_destroy(
+                            &mut diags,
+                            prior_state,
+                            request.prior_private,
+                            provider_meta_state.into(),
+                        )
+                        .await;
+                    Some((Default::default(), vec![], vec![]))
+                }
+                (true, false, false) => {
+                    if let Some((state, private_state)) = resource
+                        .plan_create(
+                            &mut diags,
+                            proposed_state,
+                            config_state.into(),
+                            provider_meta_state.into(),
+                        )
+                        .await
+                    {
+                        Some((state, private_state, vec![]))
+                    } else {
+                        None
+                    }
+                }
+                _ => {
+                    diags.root_error_short("Resource is planned both for creation and deletion");
+                    None
+                }
+            }
         } else {
             None
         }
@@ -260,16 +302,49 @@ impl tf::provider_server::Provider for Arc<Server> {
             request.config,
             request.provider_meta,
         ) {
-            resource
-                .apply(
-                    &mut diags,
-                    prior_state.into(),
-                    planned_state.into(),
-                    config_state.into(),
-                    request.planned_private,
-                    provider_meta_state.into(),
-                )
-                .await
+            let prior_state = RawValue::from(prior_state);
+            let planned_state = RawValue::from(planned_state);
+            let config_state = RawValue::from(config_state);
+
+            match (
+                prior_state.is_null(),
+                planned_state.is_null(),
+                config_state.is_null(),
+            ) {
+                (false, false, false) => {
+                    resource
+                        .update(
+                            &mut diags,
+                            prior_state,
+                            planned_state,
+                            config_state,
+                            request.planned_private,
+                            provider_meta_state.into(),
+                        )
+                        .await
+                }
+                (false, true, true) => {
+                    resource
+                        .destroy(&mut diags, prior_state, provider_meta_state.into())
+                        .await;
+                    Some((Default::default(), vec![]))
+                }
+                (true, false, false) => {
+                    resource
+                        .create(
+                            &mut diags,
+                            planned_state,
+                            config_state,
+                            request.planned_private,
+                            provider_meta_state.into(),
+                        )
+                        .await
+                }
+                _ => {
+                    diags.root_error_short("Resource is marked both for creation and deletion");
+                    None
+                }
+            }
         } else {
             None
         }
