@@ -60,8 +60,23 @@ where
         let connection_default = Default::default();
         let connection = state.connection.as_ref().unwrap_or(&connection_default);
 
+        let state_env: Vec<_> =
+            state
+                .inputs
+                .iter()
+                .flatten()
+                .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_ref_option()?.as_str())))
+                .chain(
+                    state.inputs.iter().flatten().filter_map(|(k, v)| {
+                        Some((format!("STATE_{k}"), v.as_ref_option()?.as_str()))
+                    }),
+                )
+                .collect();
+
         if let Value::Value(ref reads) = state.read {
-            let mut outputs = HashMap::with_capacity(reads.len());
+            let mut outputs = state
+                .state
+                .unwrap_or_else(|| HashMap::with_capacity(reads.len()));
             let attr_path = AttributePath::new("read");
 
             for (name, read) in reads {
@@ -69,9 +84,14 @@ where
                     let attr_path = attr_path.clone().key(name).key("cmd");
 
                     let cmd = read.cmd.as_ref().map(String::as_ref).unwrap_or_default();
-                    let env = read.env.iter().flatten().filter_map(|(cmd, env)| {
-                        Some((cmd.as_str(), env.as_ref_option()?.as_str()))
-                    });
+                    let env = read
+                        .env
+                        .iter()
+                        .flatten()
+                        .filter_map(|(cmd, env)| {
+                            Some((cmd.as_str(), env.as_ref_option()?.as_str()))
+                        })
+                        .chain(state_env.iter().map(|(k, v)| (k.as_str(), *v)));
 
                     match connection.execute(cmd, env).await {
                         Ok(res) => {
@@ -86,7 +106,7 @@ where
 
                                 outputs.insert(name.clone(), Value::Value(res.stdout));
                             } else {
-                                diags.error(
+                                diags.warning(
                                     format!("`read` failed with status code: {}", res.status),
                                     res.stderr,
                                     attr_path,
@@ -94,7 +114,7 @@ where
                             }
                         }
                         Err(err) => {
-                            diags.error("Failed to read resource state", err, attr_path);
+                            diags.warning("Failed to read resource state", err, attr_path);
                         }
                     };
                 }
@@ -207,6 +227,59 @@ where
         let connection_default = Default::default();
         let connection = state.connection.as_ref().unwrap_or(&connection_default);
 
+        let state_env: Vec<_> = state
+            .inputs
+            .iter()
+            .flatten()
+            .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_ref_option()?.as_str())))
+            .collect();
+
+        let create_cmd = state
+            .create
+            .as_ref()
+            .and_then(|create| create.cmd.as_ref())
+            .map(String::as_str)
+            .unwrap_or_default();
+        if create_cmd != "" {
+            let attr_path = AttributePath::new("create").index(0).attribute("cmd");
+            match connection
+                .execute(create_cmd, state_env.iter().map(|(k, v)| (k.as_str(), *v)))
+                .await
+            {
+                Ok(res) => {
+                    if res.stdout.len() > 0 {
+                        diags.warning(
+                            "`create` stdout was not empty",
+                            res.stdout,
+                            attr_path.clone(),
+                        );
+                    }
+                    if res.status == 0 {
+                        if res.stderr.len() > 0 {
+                            diags.warning(
+                                "`create` succeeded but stderr was not empty",
+                                res.stderr,
+                                attr_path,
+                            );
+                        }
+                    } else {
+                        diags.error(
+                            format!("`create` failed with status code: {}", res.status),
+                            res.stderr,
+                            attr_path,
+                        );
+                    }
+                }
+                Err(err) => {
+                    diags.error("Failed to create resource", err, attr_path);
+                }
+            }
+        }
+
+        if diags.errors.len() > 0 {
+            return None;
+        }
+
         // Read all outputs after the resource creation
         if let Value::Value(ref reads) = state.read {
             let mut outputs = HashMap::with_capacity(reads.len());
@@ -217,9 +290,12 @@ where
                     let attr_path = attr_path.clone().key(name).key("cmd");
 
                     let cmd = read.cmd.as_ref().map(String::as_str).unwrap_or_default();
-                    let env = read.env.iter().flatten().filter_map(|(cmd, env)| {
-                        Some((cmd.as_str(), env.as_ref_option()?.as_str()))
-                    });
+                    let env = read
+                        .env
+                        .iter()
+                        .flatten()
+                        .filter_map(|(k, v)| Some((k.as_str(), v.as_ref_option()?.as_str())))
+                        .chain(state_env.iter().map(|(k, v)| (k.as_str(), *v)));
 
                     match connection.execute(cmd, env).await {
                         Ok(res) => {
@@ -279,10 +355,67 @@ where
     }
     async fn destroy(
         &self,
-        _diags: &mut Diagnostics,
-        _prior_state: Self::State,
+        diags: &mut Diagnostics,
+        state: Self::State,
         _provider_meta_state: Self::ProviderMetaState,
     ) -> Option<()> {
+        let connection_default = Default::default();
+        let connection = state.connection.as_ref().unwrap_or(&connection_default);
+
+        let state_env: Vec<_> =
+            state
+                .inputs
+                .iter()
+                .flatten()
+                .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_ref_option()?.as_str())))
+                .chain(
+                    state.inputs.iter().flatten().filter_map(|(k, v)| {
+                        Some((format!("STATE_{k}"), v.as_ref_option()?.as_str()))
+                    }),
+                )
+                .collect();
+
+        let destroy_cmd = state
+            .destroy
+            .as_ref()
+            .and_then(|create| create.cmd.as_ref())
+            .map(String::as_str)
+            .unwrap_or_default();
+        if destroy_cmd != "" {
+            let attr_path = AttributePath::new("destroy").index(0).attribute("cmd");
+            match connection
+                .execute(destroy_cmd, state_env.iter().map(|(k, v)| (k.as_str(), *v)))
+                .await
+            {
+                Ok(res) => {
+                    if res.stdout.len() > 0 {
+                        diags.warning(
+                            "`destroy` stdout was not empty",
+                            res.stdout,
+                            attr_path.clone(),
+                        );
+                    }
+                    if res.status == 0 {
+                        if res.stderr.len() > 0 {
+                            diags.warning(
+                                "`destroy` succeeded but stderr was not empty",
+                                res.stderr,
+                                attr_path,
+                            );
+                        }
+                    } else {
+                        diags.error(
+                            format!("`destroy` failed with status code: {}", res.status),
+                            res.stderr,
+                            attr_path,
+                        );
+                    }
+                }
+                Err(err) => {
+                    diags.error("Failed to destroy resource", err, attr_path);
+                }
+            }
+        }
         Some(())
     }
 }

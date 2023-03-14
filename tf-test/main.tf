@@ -19,8 +19,15 @@ resource "cmd_local_exec" "test" {
     pouet = null_resource.pouet.id
   }
 
+  create {
+    cmd = "env | grep -P 'INPUT|STATE|HOME'"
+  }
+  destroy {
+    cmd = "env | grep -P 'INPUT|STATE|HOME'"
+  }
+
   read "plop" {
-    cmd = "echo pouet"
+    cmd = "env | grep -P 'INPUT|STATE|HOME'; false"
   }
 }
 
