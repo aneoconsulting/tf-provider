@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics, ValueString};
+use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
 pub mod local;
 
@@ -18,11 +18,9 @@ pub trait Connection: Send + Sync + 'static + Default {
     const NAME: &'static str;
 
     /// execute a command over the connection
-    async fn execute(
-        &self,
-        cmd: &str,
-        env: &HashMap<String, ValueString>,
-    ) -> Result<ExecutionResult>;
+    async fn execute<'a, I>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
+    where
+        I: IntoIterator<Item = (&'a str, &'a str)> + Send + Sync;
 
     /// Validate the state is valid
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) -> Option<()>;

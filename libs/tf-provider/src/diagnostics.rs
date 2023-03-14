@@ -56,7 +56,7 @@ impl Diagnostics {
         self.add_warning(Diagnostic::root(summary, detail))
     }
     /// Add a warning without details
-    pub fn error_warning<S: ToString>(&mut self, summary: S, attribute: AttributePath) {
+    pub fn warning_short<S: ToString>(&mut self, summary: S, attribute: AttributePath) {
         self.add_warning(Diagnostic::short(summary, attribute))
     }
     /// Add a warning without AttributePath nor details

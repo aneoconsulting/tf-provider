@@ -274,7 +274,21 @@ impl<T> Value<T> {
         }
     }
     #[inline]
-    pub fn into_option(self) -> Option<T> {
+    pub fn as_option(self) -> Option<T> {
+        match self {
+            Value::Value(x) => Some(x),
+            _ => None,
+        }
+    }
+    #[inline]
+    pub fn as_ref_option(&self) -> Option<&T> {
+        match self {
+            Value::Value(x) => Some(x),
+            _ => None,
+        }
+    }
+    #[inline]
+    pub fn as_mut_option(&mut self) -> Option<&mut T> {
         match self {
             Value::Value(x) => Some(x),
             _ => None,
@@ -489,7 +503,7 @@ impl<A> Iterator for Item<A> {
 
     #[inline]
     fn next(&mut self) -> Option<A> {
-        self.val.take().into_option()
+        self.val.take().as_option()
     }
 
     #[inline]
@@ -504,7 +518,7 @@ impl<A> Iterator for Item<A> {
 impl<A> DoubleEndedIterator for Item<A> {
     #[inline]
     fn next_back(&mut self) -> Option<A> {
-        self.val.take().into_option()
+        self.val.take().as_option()
     }
 }
 

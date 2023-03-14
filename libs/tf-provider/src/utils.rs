@@ -34,25 +34,6 @@ pub trait OptionExpand {
     fn expand(self) -> Self::Output;
 }
 
-pub trait MapInto<U> {
-    type Output;
-    fn map_into(self) -> Self::Output;
-}
-
-impl<T, U> MapInto<U> for Option<T>
-where
-    T: Into<U>,
-{
-    type Output = Option<U>;
-    fn map_into(self) -> Self::Output {
-        if let Some(value) = self {
-            Some(value.into())
-        } else {
-            None
-        }
-    }
-}
-
 pub trait CollectDiagnostics {
     type Output;
     fn collect_diagnostics(self, diags: &mut Diagnostics) -> Self::Output;

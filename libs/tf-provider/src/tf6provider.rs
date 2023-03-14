@@ -5,7 +5,7 @@ use crate::raw::RawValue;
 use crate::server::Server;
 use crate::tfplugin6 as tf;
 use crate::tfplugin6::get_provider_schema::ServerCapabilities;
-use crate::utils::{CollectDiagnostics, MapInto, OptionExpand};
+use crate::utils::{CollectDiagnostics, OptionExpand};
 
 #[tonic::async_trait]
 impl tf::provider_server::Provider for Arc<Server> {
@@ -13,8 +13,8 @@ impl tf::provider_server::Provider for Arc<Server> {
         &self,
         _request: tonic::Request<tf::get_provider_schema::Request>,
     ) -> Result<tonic::Response<tf::get_provider_schema::Response>, tonic::Status> {
-        let schema = self.schema.as_ref().map_into();
-        let meta_schema = self.meta_schema.as_ref().map_into();
+        let schema = self.schema.as_ref().map(Into::into);
+        let meta_schema = self.meta_schema.as_ref().map(Into::into);
         let resources = self
             .resources
             .iter()
@@ -129,7 +129,7 @@ impl tf::provider_server::Provider for Arc<Server> {
 
         Ok(tonic::Response::new(tf::upgrade_resource_state::Response {
             diagnostics: diags.into(),
-            upgraded_state: upgraded_state.map_into(),
+            upgraded_state: upgraded_state.map(Into::into),
         }))
     }
     /// ////// One-time initialization, called before other functions below
@@ -184,7 +184,7 @@ impl tf::provider_server::Provider for Arc<Server> {
             .expand();
 
         Ok(tonic::Response::new(tf::read_resource::Response {
-            new_state: state.map_into(),
+            new_state: state.map(Into::into),
             diagnostics: diags.into(),
             private: private_state.unwrap_or_default(),
         }))
@@ -352,7 +352,7 @@ impl tf::provider_server::Provider for Arc<Server> {
         .expand();
 
         Ok(tonic::Response::new(tf::apply_resource_change::Response {
-            new_state: state.map_into(),
+            new_state: state.map(Into::into),
             private: private_state.unwrap_or_default(),
             diagnostics: diags.into(),
             legacy_type_system: false,
@@ -405,7 +405,7 @@ impl tf::provider_server::Provider for Arc<Server> {
         .collect_diagnostics(&mut diags);
 
         Ok(tonic::Response::new(tf::read_data_source::Response {
-            state: state.map_into(),
+            state: state.map(Into::into),
             diagnostics: diags.into(),
         }))
     }

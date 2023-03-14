@@ -5,7 +5,7 @@ use anyhow::{anyhow, Error, Result};
 use async_process::{Command, Output};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics, Value, ValueString};
+use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Default, Clone)]
 pub struct ConnectionLocal {}
@@ -25,24 +25,15 @@ impl TryFrom<Output> for ExecutionResult {
 impl Connection for ConnectionLocal {
     const NAME: &'static str = "local";
 
-    async fn execute(
-        &self,
-        cmd: &str,
-        env: &HashMap<String, ValueString>,
-    ) -> Result<ExecutionResult> {
+    async fn execute<'a, I>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
+    where
+        I: IntoIterator<Item = (&'a str, &'a str)> + Send + Sync,
+    {
         if cmd.len() > 0 {
             let mut command = Command::new("sh");
             command.arg("-c").arg(cmd);
-            for (k, v) in env {
-                match v {
-                    Value::Value(v) => {
-                        command.env(k, v);
-                    }
-                    Value::Null => {
-                        command.env(k, "");
-                    }
-                    Value::Unknown => (),
-                }
+            for (k, v) in env.into_iter() {
+                command.env(k, v);
             }
             Ok(command.output().await?.try_into()?)
         } else {

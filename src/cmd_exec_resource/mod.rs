@@ -68,9 +68,10 @@ where
                 if let Value::Value(read) = read {
                     let attr_path = attr_path.clone().key(name).key("cmd");
 
-                    let default_env = HashMap::default();
-                    let cmd = read.cmd.as_ref().map(|v| v.as_str()).unwrap_or_default();
-                    let env = read.env.as_ref().unwrap_or(&default_env);
+                    let cmd = read.cmd.as_ref().map(String::as_ref).unwrap_or_default();
+                    let env = read.env.iter().flatten().filter_map(|(cmd, env)| {
+                        Some((cmd.as_str(), env.as_ref_option()?.as_str()))
+                    });
 
                     match connection.execute(cmd, env).await {
                         Ok(res) => {
@@ -215,9 +216,10 @@ where
                 if let Value::Value(read) = read {
                     let attr_path = attr_path.clone().key(name).key("cmd");
 
-                    let default_env = HashMap::default();
-                    let cmd = read.cmd.as_ref().map(|v| v.as_str()).unwrap_or_default();
-                    let env = read.env.as_ref().unwrap_or(&default_env);
+                    let cmd = read.cmd.as_ref().map(String::as_str).unwrap_or_default();
+                    let env = read.env.iter().flatten().filter_map(|(cmd, env)| {
+                        Some((cmd.as_str(), env.as_ref_option()?.as_str()))
+                    });
 
                     match connection.execute(cmd, env).await {
                         Ok(res) => {
