@@ -1,5 +1,7 @@
 use std::{
+    borrow::Cow,
     collections::{HashMap, HashSet},
+    fmt::{Debug, Display},
     iter::FusedIterator,
     mem,
     ops::{Deref, DerefMut},
@@ -9,9 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::utils::serde_unknown;
 
-#[derive(
-    Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Debug, Hash, Default, Serialize, Deserialize,
-)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Value<T> {
     Value(T),
@@ -21,7 +21,7 @@ pub enum Value<T> {
     Unknown,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ValueAny {
     String(String),
@@ -50,11 +50,11 @@ impl ValueAny {
 pub struct StructEmpty {}
 
 pub type ValueEmpty = Value<StructEmpty>;
-pub type ValueString = Value<String>;
+pub type ValueString<'a> = Value<Cow<'a, str>>;
 pub type ValueNumber = Value<i64>;
 pub type ValueList<T> = Value<Vec<T>>;
 pub type ValueSet<T> = Value<HashSet<T>>;
-pub type ValueMap<T> = Value<HashMap<String, T>>;
+pub type ValueMap<'a, T> = Value<HashMap<Cow<'a, String>, T>>;
 
 pub mod serde_as_vec {
     use anyhow::anyhow;
@@ -103,21 +103,21 @@ impl<T> Value<T> {
     #[inline]
     pub const fn is_value(&self) -> bool {
         match self {
-            Value::Value(_) => true,
+            Self::Value(_) => true,
             _ => false,
         }
     }
     #[inline]
     pub const fn is_null(&self) -> bool {
         match self {
-            Value::Null => true,
+            Self::Null => true,
             _ => false,
         }
     }
     #[inline]
     pub const fn is_unknown(&self) -> bool {
         match self {
-            Value::Unknown => true,
+            Self::Unknown => true,
             _ => false,
         }
     }
@@ -128,17 +128,17 @@ impl<T> Value<T> {
     #[inline]
     pub const fn as_ref(&self) -> Value<&T> {
         match *self {
-            Value::Value(ref x) => Value::Value(x),
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(ref x) => Value::Value(x),
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
     #[inline]
     pub fn as_mut(&mut self) -> Value<&mut T> {
         match *self {
-            Value::Value(ref mut x) => Value::Value(x),
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(ref mut x) => Value::Value(x),
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
 
@@ -148,23 +148,23 @@ impl<T> Value<T> {
     #[inline]
     pub fn expect(self, msg: &str) -> T {
         match self {
-            Value::Value(val) => val,
-            Value::Null => panic!("{} (Null)", msg),
-            Value::Unknown => panic!("{} (Unknown)", msg),
+            Self::Value(val) => val,
+            Self::Null => panic!("{} (Null)", msg),
+            Self::Unknown => panic!("{} (Unknown)", msg),
         }
     }
     #[inline]
     pub fn unwrap(self) -> T {
         match self {
-            Value::Value(x) => x,
-            Value::Null => panic!("called `Value::unwrap()` on a `Null` value"),
-            Value::Unknown => panic!("called `Value::unwrap()` on an `Unknown` value"),
+            Self::Value(x) => x,
+            Self::Null => panic!("called `Value::unwrap()` on a `Null` value"),
+            Self::Unknown => panic!("called `Value::unwrap()` on an `Unknown` value"),
         }
     }
     #[inline]
     pub fn unwrap_or(self, default: T) -> T {
         match self {
-            Value::Value(x) => x,
+            Self::Value(x) => x,
             _ => default,
         }
     }
@@ -174,7 +174,7 @@ impl<T> Value<T> {
         F: FnOnce() -> T,
     {
         match self {
-            Value::Value(x) => x,
+            Self::Value(x) => x,
             _ => f(),
         }
     }
@@ -184,7 +184,7 @@ impl<T> Value<T> {
         T: Default,
     {
         match self {
-            Value::Value(x) => x,
+            Self::Value(x) => x,
             _ => Default::default(),
         }
     }
@@ -198,9 +198,9 @@ impl<T> Value<T> {
         F: FnOnce(T) -> U,
     {
         match self {
-            Value::Value(x) => Value::Value(f(x)),
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(x) => Value::Value(f(x)),
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
     #[inline]
@@ -208,7 +208,7 @@ impl<T> Value<T> {
     where
         F: FnOnce(&T),
     {
-        if let Value::Value(ref x) = self {
+        if let Self::Value(ref x) = self {
             f(x);
         }
         self
@@ -219,7 +219,7 @@ impl<T> Value<T> {
         F: FnOnce(T) -> U,
     {
         match self {
-            Value::Value(x) => f(x),
+            Self::Value(x) => f(x),
             _ => default,
         }
     }
@@ -230,14 +230,14 @@ impl<T> Value<T> {
         D: FnOnce() -> U,
     {
         match self {
-            Value::Value(x) => f(x),
+            Self::Value(x) => f(x),
             _ => default(),
         }
     }
     #[inline]
     pub fn ok_or<E>(self, err: E) -> Result<T, E> {
         match self {
-            Value::Value(x) => Ok(x),
+            Self::Value(x) => Ok(x),
             _ => Err(err),
         }
     }
@@ -247,7 +247,7 @@ impl<T> Value<T> {
         F: FnOnce() -> E,
     {
         match self {
-            Value::Value(x) => Ok(x),
+            Self::Value(x) => Ok(x),
             _ => Err(err()),
         }
     }
@@ -276,21 +276,41 @@ impl<T> Value<T> {
     #[inline]
     pub fn as_option(self) -> Option<T> {
         match self {
-            Value::Value(x) => Some(x),
+            Self::Value(x) => Some(x),
             _ => None,
         }
     }
     #[inline]
     pub fn as_ref_option(&self) -> Option<&T> {
         match self {
-            Value::Value(x) => Some(x),
+            Self::Value(x) => Some(x),
             _ => None,
         }
     }
     #[inline]
     pub fn as_mut_option(&mut self) -> Option<&mut T> {
         match self {
-            Value::Value(x) => Some(x),
+            Self::Value(x) => Some(x),
+            _ => None,
+        }
+    }
+    #[inline]
+    pub fn as_deref_option(&self) -> Option<&T::Target>
+    where
+        T: Deref,
+    {
+        match self {
+            Self::Value(x) => Some(x),
+            _ => None,
+        }
+    }
+    #[inline]
+    pub fn as_deref_mut_option(&mut self) -> Option<&mut T::Target>
+    where
+        T: DerefMut,
+    {
+        match self {
+            Self::Value(x) => Some(x),
             _ => None,
         }
     }
@@ -317,9 +337,9 @@ impl<T> Value<T> {
     #[inline]
     pub fn and<U>(self, rhs: Value<U>) -> Value<U> {
         match self {
-            Value::Value(_) => rhs,
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(_) => rhs,
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
     #[inline]
@@ -328,9 +348,9 @@ impl<T> Value<T> {
         F: FnOnce(T) -> Value<U>,
     {
         match self {
-            Value::Value(x) => f(x),
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(x) => f(x),
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
     #[inline]
@@ -339,23 +359,23 @@ impl<T> Value<T> {
         P: FnOnce(&T) -> bool,
     {
         match self {
-            Value::Value(x) => {
+            Self::Value(x) => {
                 if predicate(&x) {
                     Value::Value(x)
                 } else {
                     Value::Null
                 }
             }
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
     #[inline]
     pub fn or(self, rhs: Self) -> Self {
         match self {
-            Value::Value(x) => Value::Value(x),
-            Value::Null => rhs,
-            Value::Unknown => Value::Unknown,
+            Self::Value(x) => Value::Value(x),
+            Self::Null => rhs,
+            Self::Unknown => Value::Unknown,
         }
     }
     #[inline]
@@ -364,9 +384,9 @@ impl<T> Value<T> {
         F: FnOnce() -> Self,
     {
         match self {
-            Value::Value(x) => Value::Value(x),
-            Value::Null => f(),
-            Value::Unknown => Value::Unknown,
+            Self::Value(x) => Value::Value(x),
+            Self::Null => f(),
+            Self::Unknown => Value::Unknown,
         }
     }
 
@@ -384,7 +404,7 @@ impl<T> Value<T> {
         U: PartialEq<T>,
     {
         match self {
-            Value::Value(y) => x.eq(y),
+            Self::Value(y) => x.eq(y),
             _ => false,
         }
     }
@@ -396,9 +416,9 @@ impl<T> Value<&T> {
         T: Copy,
     {
         match self {
-            Value::Value(&x) => Value::Value(x),
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(&x) => Value::Value(x),
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
     pub fn cloned(self) -> Value<T>
@@ -406,9 +426,9 @@ impl<T> Value<&T> {
         T: Copy,
     {
         match self {
-            Value::Value(x) => Value::Value(x.clone()),
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(x) => Value::Value(x.clone()),
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
 }
@@ -418,9 +438,9 @@ impl<T> Value<&mut T> {
         T: Copy,
     {
         match self {
-            Value::Value(&mut x) => Value::Value(x),
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(&mut x) => Value::Value(x),
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
         }
     }
     pub fn cloned(self) -> Value<T>
@@ -428,9 +448,42 @@ impl<T> Value<&mut T> {
         T: Copy,
     {
         match self {
-            Value::Value(x) => Value::Value(x.clone()),
-            Value::Null => Value::Null,
-            Value::Unknown => Value::Unknown,
+            Self::Value(x) => Value::Value(x.clone()),
+            Self::Null => Value::Null,
+            Self::Unknown => Value::Unknown,
+        }
+    }
+}
+
+impl<'a> Value<Cow<'a, str>> {
+    #[inline]
+    pub fn as_str(&'a self) -> &'a str {
+        match self {
+            Self::Value(x) => x.as_ref(),
+            _ => "",
+        }
+    }
+    #[inline]
+    pub fn as_bytes(&'a self) -> &'a [u8] {
+        match self {
+            Self::Value(x) => x.as_bytes(),
+            _ => "".as_bytes(),
+        }
+    }
+}
+impl<'a> Value<&'a Cow<'a, str>> {
+    #[inline]
+    pub fn as_str(&self) -> &'a str {
+        match *self {
+            Self::Value(x) => x.as_ref(),
+            _ => "",
+        }
+    }
+    #[inline]
+    pub fn as_bytes(&self) -> &'a [u8] {
+        match *self {
+            Self::Value(x) => x.as_bytes(),
+            _ => "".as_bytes(),
         }
     }
 }
@@ -465,6 +518,30 @@ impl<'a, T> IntoIterator for &'a mut Value<T> {
     }
 }
 
+impl<T: Debug> Debug for Value<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Value(value) => Debug::fmt(value, f),
+            Self::Null => f.write_str("Null"),
+            Self::Unknown => f.write_str("Unknown"),
+        }
+    }
+}
+
+impl Debug for ValueAny {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::String(value) => Debug::fmt(value, f),
+            Self::Number(value) => Debug::fmt(value, f),
+            Self::Bool(value) => Debug::fmt(value, f),
+            Self::List(value) => Debug::fmt(value, f),
+            Self::Map(value) => Debug::fmt(value, f),
+            Self::Null => f.write_str("Null"),
+            Self::Unknown => f.write_str("Unknown"),
+        }
+    }
+}
+
 impl<T> From<T> for Value<T> {
     #[inline]
     fn from(value: T) -> Self {
@@ -490,6 +567,31 @@ impl<T> From<Option<T>> for Value<T> {
             Some(x) => Self::Value(x),
             None => Self::Null,
         }
+    }
+}
+
+impl<'a> From<&'a str> for Value<Cow<'a, str>> {
+    fn from(value: &'a str) -> Self {
+        Self::Value(Cow::Borrowed(value))
+    }
+}
+impl From<String> for Value<Cow<'_, str>> {
+    fn from(value: String) -> Self {
+        Self::Value(Cow::Owned(value))
+    }
+}
+
+impl<'a> Deref for Value<Cow<'a, str>> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl Display for Value<Cow<'_, str>> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

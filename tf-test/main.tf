@@ -27,7 +27,7 @@ resource "cmd_local_exec" "test" {
   }
 
   read "plop" {
-    cmd = "env | grep -P 'INPUT|STATE|HOME'; false"
+    cmd = "env | grep -P 'INPUT|STATE|HOME'"
   }
 }
 

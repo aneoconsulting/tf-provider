@@ -5,7 +5,7 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
-use tf_provider::{AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty};
+use tf_provider::{AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty, ValueString};
 
 use crate::connection::Connection;
 use crate::utils::WithSchema;
@@ -60,18 +60,19 @@ where
         let connection_default = Default::default();
         let connection = state.connection.as_ref().unwrap_or(&connection_default);
 
-        let state_env: Vec<_> =
-            state
-                .inputs
-                .iter()
-                .flatten()
-                .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_ref_option()?.as_str())))
-                .chain(
-                    state.inputs.iter().flatten().filter_map(|(k, v)| {
-                        Some((format!("STATE_{k}"), v.as_ref_option()?.as_str()))
-                    }),
-                )
-                .collect();
+        let state_env: Vec<_> = state
+            .inputs
+            .iter()
+            .flatten()
+            .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_deref_option()?)))
+            .chain(
+                state
+                    .inputs
+                    .iter()
+                    .flatten()
+                    .filter_map(|(k, v)| Some((format!("STATE_{k}"), v.as_deref_option()?))),
+            )
+            .collect();
 
         if let Value::Value(ref reads) = state.read {
             let mut outputs = state
@@ -83,14 +84,12 @@ where
                 if let Value::Value(read) = read {
                     let attr_path = attr_path.clone().key(name).key("cmd");
 
-                    let cmd = read.cmd.as_ref().map(String::as_ref).unwrap_or_default();
+                    let cmd = read.cmd.as_str();
                     let env = read
                         .env
                         .iter()
                         .flatten()
-                        .filter_map(|(cmd, env)| {
-                            Some((cmd.as_str(), env.as_ref_option()?.as_str()))
-                        })
+                        .filter_map(|(cmd, env)| Some((cmd.as_str(), env.as_deref_option()?)))
                         .chain(state_env.iter().map(|(k, v)| (k.as_str(), *v)));
 
                     match connection.execute(cmd, env).await {
@@ -104,7 +103,7 @@ where
                                     );
                                 }
 
-                                outputs.insert(name.clone(), Value::Value(res.stdout));
+                                outputs.insert(name.clone(), res.stdout.into());
                             } else {
                                 diags.warning(
                                     format!("`read` failed with status code: {}", res.status),
@@ -140,7 +139,7 @@ where
         diags.root_warning("config_state", format!("{:#?}", config_state));
 
         let mut state = proposed_state.clone();
-        state.id = Value::Unknown;
+        state.id = ValueString::Unknown;
 
         if state.inputs.is_null() {
             state.inputs = Value::Value(Default::default());
@@ -150,7 +149,7 @@ where
             Value::Value(reads) => {
                 let mut outputs = HashMap::with_capacity(reads.len());
                 for (k, _) in reads {
-                    outputs.insert(k.clone(), Value::Unknown);
+                    outputs.insert(k.clone(), ValueString::Unknown);
                 }
                 state.state = Value::Value(outputs);
             }
@@ -184,7 +183,7 @@ where
 
         let mut state = proposed_state.clone();
         if state.id.is_null() {
-            state.id = Value::Unknown;
+            state.id = ValueString::Unknown;
         }
         if state.inputs.is_null() {
             state.inputs = Value::Value(Default::default());
@@ -213,7 +212,7 @@ where
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state.clone();
-        state.id = Value::Value(
+        state.id = ValueString::Value(
             thread_rng()
                 .sample_iter(&Alphanumeric)
                 .take(30)
@@ -231,14 +230,13 @@ where
             .inputs
             .iter()
             .flatten()
-            .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_ref_option()?.as_str())))
+            .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_deref_option()?)))
             .collect();
 
         let create_cmd = state
             .create
             .as_ref()
-            .and_then(|create| create.cmd.as_ref())
-            .map(String::as_str)
+            .and_then(|create| create.cmd.as_deref())
             .unwrap_or_default();
         if create_cmd != "" {
             let attr_path = AttributePath::new("create").index(0).attribute("cmd");
@@ -289,12 +287,12 @@ where
                 if let Value::Value(read) = read {
                     let attr_path = attr_path.clone().key(name).key("cmd");
 
-                    let cmd = read.cmd.as_ref().map(String::as_str).unwrap_or_default();
+                    let cmd = read.cmd.as_str();
                     let env = read
                         .env
                         .iter()
                         .flatten()
-                        .filter_map(|(k, v)| Some((k.as_str(), v.as_ref_option()?.as_str())))
+                        .filter_map(|(k, v)| Some((k.as_str(), v.as_deref_option()?)))
                         .chain(state_env.iter().map(|(k, v)| (k.as_str(), *v)));
 
                     match connection.execute(cmd, env).await {
@@ -308,7 +306,7 @@ where
                                     );
                                 }
 
-                                outputs.insert(name.clone(), Value::Value(res.stdout));
+                                outputs.insert(name.clone(), ValueString::Value(res.stdout.into()));
                             } else {
                                 diags.error(
                                     format!("`read` failed with status code: {}", res.status),
@@ -339,7 +337,7 @@ where
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state.clone();
         if !state.id.is_value() {
-            state.id = Value::Value(
+            state.id = ValueString::Value(
                 thread_rng()
                     .sample_iter(&Alphanumeric)
                     .take(30)
@@ -362,24 +360,24 @@ where
         let connection_default = Default::default();
         let connection = state.connection.as_ref().unwrap_or(&connection_default);
 
-        let state_env: Vec<_> =
-            state
-                .inputs
-                .iter()
-                .flatten()
-                .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_ref_option()?.as_str())))
-                .chain(
-                    state.inputs.iter().flatten().filter_map(|(k, v)| {
-                        Some((format!("STATE_{k}"), v.as_ref_option()?.as_str()))
-                    }),
-                )
-                .collect();
+        let state_env: Vec<_> = state
+            .inputs
+            .iter()
+            .flatten()
+            .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_deref_option()?)))
+            .chain(
+                state
+                    .inputs
+                    .iter()
+                    .flatten()
+                    .filter_map(|(k, v)| Some((format!("STATE_{k}"), v.as_deref_option()?))),
+            )
+            .collect();
 
         let destroy_cmd = state
             .destroy
             .as_ref()
-            .and_then(|create| create.cmd.as_ref())
-            .map(String::as_str)
+            .and_then(|destroy| destroy.cmd.as_deref())
             .unwrap_or_default();
         if destroy_cmd != "" {
             let attr_path = AttributePath::new("destroy").index(0).attribute("cmd");

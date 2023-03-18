@@ -7,11 +7,11 @@ use crate::connection::Connection;
 use crate::utils::WithValidate;
 
 #[async_trait]
-impl WithValidate for super::state::StateCmd {
+impl WithValidate for super::state::StateCmd<'_> {
     async fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) {
         attr_path.add_attribute("cmd");
-        match self.cmd {
-            Value::Value(ref cmd) => {
+        match self.cmd.as_ref() {
+            Value::Value(cmd) => {
                 if cmd.len() == 0 {
                     diags.error_short("`cmd` cannot be empty", attr_path);
                 }
@@ -27,7 +27,7 @@ impl WithValidate for super::state::StateCmd {
 }
 
 #[async_trait]
-impl WithValidate for super::state::StateUpdate {
+impl WithValidate for super::state::StateUpdate<'_> {
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
         _ = self.cmd.validate(diags, attr_path.clone());
         for (name, map) in [("triggers", &self.triggers), ("reloads", &self.reloads)] {
@@ -36,7 +36,7 @@ impl WithValidate for super::state::StateUpdate {
                 Value::Value(map) => {
                     for (k, v) in map {
                         let attr_path = attr_path.clone().key(k);
-                        match v {
+                        match v.as_ref() {
                             Value::Value(v) => {
                                 if v.len() == 0 {
                                     diags.error(

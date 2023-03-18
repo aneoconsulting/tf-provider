@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData};
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -16,38 +16,39 @@ where
     T: Serialize,
     T: for<'b> Deserialize<'b>,
 {
-    pub id: ValueString,
-    pub inputs: ValueMap<ValueString>,
-    pub state: ValueMap<ValueString>,
-    pub read: ValueMap<Value<StateRead>>,
+    #[serde(borrow = "'a")]
+    pub id: ValueString<'a>,
+    pub inputs: ValueMap<'a, ValueString<'a>>,
+    pub state: ValueMap<'a, ValueString<'a>>,
+    pub read: ValueMap<'a, Value<StateRead<'a>>>,
     #[serde(with = "value::serde_as_vec")]
-    pub create: Value<StateCreate>,
+    pub create: Value<StateCreate<'a>>,
     #[serde(with = "value::serde_as_vec")]
-    pub destroy: Value<StateDestroy>,
-    pub update: ValueList<Value<StateUpdate>>,
+    pub destroy: Value<StateDestroy<'a>>,
+    pub update: ValueList<Value<StateUpdate<'a>>>,
     #[serde(with = "value::serde_as_vec")]
     pub connection: Value<T>,
-
-    use_lifetime: PhantomData<&'a ()>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct StateCmd {
-    pub cmd: ValueString,
-    pub env: ValueMap<ValueString>,
+pub struct StateCmd<'a> {
+    #[serde(borrow = "'a")]
+    pub cmd: ValueString<'a>,
+    pub env: ValueMap<'a, ValueString<'a>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct StateUpdate {
+pub struct StateUpdate<'a> {
+    #[serde(borrow = "'a")]
     #[serde(flatten)]
-    pub cmd: StateCmd,
-    pub triggers: ValueMap<ValueString>,
-    pub reloads: ValueMap<ValueString>,
+    pub cmd: StateCmd<'a>,
+    pub triggers: ValueMap<'a, ValueString<'a>>,
+    pub reloads: ValueMap<'a, ValueString<'a>>,
 }
 
-pub type StateRead = StateCmd;
-pub type StateCreate = StateCmd;
-pub type StateDestroy = StateCmd;
+pub type StateRead<'a> = StateCmd<'a>;
+pub type StateCreate<'a> = StateCmd<'a>;
+pub type StateDestroy<'a> = StateCmd<'a>;
 
 impl<'a, T> WithSchema for State<'a, T>
 where
