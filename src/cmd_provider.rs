@@ -11,8 +11,8 @@ pub struct CmdProvider {}
 
 #[async_trait]
 impl Provider for CmdProvider {
-    type Config = ValueEmpty;
-    type MetaState = ValueEmpty;
+    type Config<'a> = ValueEmpty;
+    type MetaState<'a> = ValueEmpty;
 
     fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<tf_provider::Schema> {
         Some(Schema {
@@ -24,19 +24,19 @@ impl Provider for CmdProvider {
         })
     }
 
-    async fn validate(
+    async fn validate<'a>(
         &self,
         _diags: &mut tf_provider::Diagnostics,
-        _config: Self::Config,
+        _config: Self::Config<'a>,
     ) -> Option<()> {
         Some(())
     }
 
-    async fn configure(
+    async fn configure<'a>(
         &self,
         _diags: &mut tf_provider::Diagnostics,
         _terraform_version: String,
-        _config: Self::Config,
+        _config: Self::Config<'a>,
     ) -> Option<()> {
         Some(())
     }

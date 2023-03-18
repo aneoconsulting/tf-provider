@@ -30,15 +30,15 @@ where
     T: Debug,
     T: Clone,
 {
-    type State = State<T>;
-    type PrivateState = ValueEmpty;
-    type ProviderMetaState = ValueEmpty;
+    type State<'a> = State<'a, T>;
+    type PrivateState<'a> = ValueEmpty;
+    type ProviderMetaState<'a> = ValueEmpty;
 
     fn schema(&self, _diags: &mut Diagnostics) -> Option<Schema> {
         Some(State::<T>::schema())
     }
 
-    async fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()> {
+    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()> {
         config.validate(diags, Default::default()).await;
 
         if diags.errors.len() == 0 {
@@ -48,13 +48,13 @@ where
         }
     }
 
-    async fn read(
+    async fn read<'a>(
         &self,
         diags: &mut Diagnostics,
-        state: Self::State,
-        private_state: Self::PrivateState,
-        _provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState)> {
+        state: Self::State<'a>,
+        private_state: Self::PrivateState<'a>,
+        _provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = state;
 
         let connection_default = Default::default();
@@ -129,13 +129,13 @@ where
         Some((state, private_state))
     }
 
-    async fn plan_create(
+    async fn plan_create<'a>(
         &self,
         diags: &mut Diagnostics,
-        proposed_state: Self::State,
-        config_state: Self::State,
-        _provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState)> {
+        proposed_state: Self::State<'a>,
+        config_state: Self::State<'a>,
+        _provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         diags.root_warning("proposed_state", format!("{:#?}", proposed_state));
         diags.root_warning("config_state", format!("{:#?}", config_state));
 
@@ -165,17 +165,17 @@ where
 
         Some((state, Default::default()))
     }
-    async fn plan_update(
+    async fn plan_update<'a>(
         &self,
         diags: &mut Diagnostics,
-        prior_state: Self::State,
-        proposed_state: Self::State,
-        config_state: Self::State,
-        prior_private_state: Self::PrivateState,
-        _provider_meta_state: Self::ProviderMetaState,
+        prior_state: Self::State<'a>,
+        proposed_state: Self::State<'a>,
+        config_state: Self::State<'a>,
+        prior_private_state: Self::PrivateState<'a>,
+        _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(
-        Self::State,
-        Self::PrivateState,
+        Self::State<'a>,
+        Self::PrivateState<'a>,
         Vec<tf_provider::attribute_path::AttributePath>,
     )> {
         diags.root_warning("prior_state", format!("{:#?}", prior_state));
@@ -193,25 +193,25 @@ where
         Some((state, prior_private_state, vec![]))
     }
 
-    async fn plan_destroy(
+    async fn plan_destroy<'a>(
         &self,
         diags: &mut Diagnostics,
-        prior_state: Self::State,
-        _prior_private_state: Self::PrivateState,
-        _provider_meta_state: Self::ProviderMetaState,
+        prior_state: Self::State<'a>,
+        _prior_private_state: Self::PrivateState<'a>,
+        _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()> {
         diags.root_warning("prior_state", format!("{:#?}", prior_state));
         Some(())
     }
 
-    async fn create(
+    async fn create<'a>(
         &self,
         diags: &mut Diagnostics,
-        planned_state: Self::State,
-        _config_state: Self::State,
-        planned_private_state: Self::PrivateState,
-        _provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState)> {
+        planned_state: Self::State<'a>,
+        _config_state: Self::State<'a>,
+        planned_private_state: Self::PrivateState<'a>,
+        _provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state.clone();
         state.id = Value::Value(
             thread_rng()
@@ -328,15 +328,15 @@ where
 
         Some((state, planned_private_state))
     }
-    async fn update(
+    async fn update<'a>(
         &self,
         _diags: &mut Diagnostics,
-        _prior_state: Self::State,
-        planned_state: Self::State,
-        _config_state: Self::State,
-        planned_private_state: Self::PrivateState,
-        _provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState)> {
+        _prior_state: Self::State<'a>,
+        planned_state: Self::State<'a>,
+        _config_state: Self::State<'a>,
+        planned_private_state: Self::PrivateState<'a>,
+        _provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state.clone();
         if !state.id.is_value() {
             state.id = Value::Value(
@@ -353,11 +353,11 @@ where
 
         Some((state, planned_private_state))
     }
-    async fn destroy(
+    async fn destroy<'a>(
         &self,
         diags: &mut Diagnostics,
-        state: Self::State,
-        _provider_meta_state: Self::ProviderMetaState,
+        state: Self::State<'a>,
+        _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()> {
         let connection_default = Default::default();
         let connection = state.connection.as_ref().unwrap_or(&connection_default);

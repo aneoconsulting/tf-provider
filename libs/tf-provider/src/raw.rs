@@ -1,5 +1,5 @@
 use crate::{diagnostics::Diagnostics, tfplugin6};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum RawValue {
@@ -17,9 +17,9 @@ impl RawValue {
             RawValue::Json(json) => json.len() == 0 || json.as_slice() == NULL_JSON.as_bytes(),
         }
     }
-    pub fn deserialize<T>(&self, diags: &mut Diagnostics) -> Option<T>
+    pub fn deserialize<'a, T>(&'a self, diags: &mut Diagnostics) -> Option<T>
     where
-        T: DeserializeOwned,
+        T: Deserialize<'a>,
     {
         match self {
             Self::MessagePack(mp) => {

@@ -7,28 +7,28 @@ use crate::resource::DynamicResource;
 use crate::schema::Schema;
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// Trait for implementing a provider
 #[async_trait]
 pub trait Provider: Send + Sync + 'static {
     /// Configuration of the provider
-    type Config: Serialize + DeserializeOwned + Send;
+    type Config<'a>: Serialize + Deserialize<'a> + Send;
     /// State of the provider metadata
-    type MetaState: Serialize + DeserializeOwned + Send;
+    type MetaState<'a>: Serialize + Deserialize<'a> + Send;
 
     /// Get the schema of the provider
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
 
     /// Validate the configuration of the provider
-    async fn validate(&self, diags: &mut Diagnostics, config: Self::Config) -> Option<()>;
+    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::Config<'a>) -> Option<()>;
 
     /// Configure the provider
-    async fn configure(
+    async fn configure<'a>(
         &self,
         diags: &mut Diagnostics,
         terraform_version: String,
-        config: Self::Config,
+        config: Self::Config<'a>,
     ) -> Option<()>;
 
     /// Get the schema for the provider metadata (defaults to empty)

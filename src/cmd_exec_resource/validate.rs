@@ -80,11 +80,11 @@ impl WithValidate for super::state::StateUpdate {
 }
 
 #[async_trait]
-impl<T> WithValidate for super::state::State<T>
+impl<'a, T> WithValidate for super::state::State<'a, T>
 where
     T: Connection,
     T: Serialize,
-    T: for<'a> Deserialize<'a>,
+    T: for<'b> Deserialize<'b>,
 {
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
         if let Value::Value(connection) = &self.connection {

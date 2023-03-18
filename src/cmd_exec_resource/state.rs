@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 use serde::{Deserialize, Serialize};
 
@@ -10,11 +10,11 @@ use tf_provider::{
 use crate::{connection::Connection, utils::WithSchema};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct State<T>
+pub struct State<'a, T>
 where
     T: Connection,
     T: Serialize,
-    T: for<'a> Deserialize<'a>,
+    T: for<'b> Deserialize<'b>,
 {
     pub id: ValueString,
     pub inputs: ValueMap<ValueString>,
@@ -27,6 +27,8 @@ where
     pub update: ValueList<Value<StateUpdate>>,
     #[serde(with = "value::serde_as_vec")]
     pub connection: Value<T>,
+
+    use_lifetime: PhantomData<&'a ()>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -47,11 +49,11 @@ pub type StateRead = StateCmd;
 pub type StateCreate = StateCmd;
 pub type StateDestroy = StateCmd;
 
-impl<T> WithSchema for State<T>
+impl<'a, T> WithSchema for State<'a, T>
 where
     T: Connection,
     T: Serialize,
-    T: for<'a> Deserialize<'a>,
+    T: for<'b> Deserialize<'b>,
 {
     fn schema() -> Schema {
         let cmd_attribute = Attribute {

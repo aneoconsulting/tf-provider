@@ -5,99 +5,99 @@ use crate::schema::Schema;
 use crate::utils::OptionFactor;
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Deserialize, Serialize};
 
 /// Trait for implementing a resource
 #[async_trait]
 pub trait Resource: Send + Sync {
     /// State of the resource
-    type State: Serialize + DeserializeOwned + Send;
+    type State<'a>: Serialize + Deserialize<'a> + Send;
     /// Private state of the resource
-    type PrivateState: Serialize + DeserializeOwned + Send;
+    type PrivateState<'a>: Serialize + Deserialize<'a> + Send;
     /// State of the provider metadata
-    type ProviderMetaState: Serialize + DeserializeOwned + Send;
+    type ProviderMetaState<'a>: Serialize + Deserialize<'a> + Send;
 
     /// Get the schema of the resource
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the resource
-    async fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()>;
+    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()>;
     /// Read the new state of the resource
-    async fn read(
+    async fn read<'a>(
         &self,
         diags: &mut Diagnostics,
-        state: Self::State,
-        private_state: Self::PrivateState,
-        provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState)>;
+        state: Self::State<'a>,
+        private_state: Self::PrivateState<'a>,
+        provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)>;
     /// Plan the creation of a new resource
-    async fn plan_create(
+    async fn plan_create<'a>(
         &self,
         diags: &mut Diagnostics,
-        proposed_state: Self::State,
-        config_state: Self::State,
-        provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState)>;
+        proposed_state: Self::State<'a>,
+        config_state: Self::State<'a>,
+        provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)>;
     /// Plan the changes on the resource
-    async fn plan_update(
+    async fn plan_update<'a>(
         &self,
         diags: &mut Diagnostics,
-        prior_state: Self::State,
-        proposed_state: Self::State,
-        config_state: Self::State,
-        prior_private_state: Self::PrivateState,
-        provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState, Vec<AttributePath>)>;
+        prior_state: Self::State<'a>,
+        proposed_state: Self::State<'a>,
+        config_state: Self::State<'a>,
+        prior_private_state: Self::PrivateState<'a>,
+        provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>, Vec<AttributePath>)>;
     /// Plan the destruction of the resource
-    async fn plan_destroy(
+    async fn plan_destroy<'a>(
         &self,
         diags: &mut Diagnostics,
-        prior_state: Self::State,
-        prior_private_state: Self::PrivateState,
-        provider_meta_state: Self::ProviderMetaState,
+        prior_state: Self::State<'a>,
+        prior_private_state: Self::PrivateState<'a>,
+        provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()>;
     /// Create a new resource
-    async fn create(
+    async fn create<'a>(
         &self,
         diags: &mut Diagnostics,
-        planned_state: Self::State,
-        config_state: Self::State,
-        planned_private_state: Self::PrivateState,
-        provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState)>;
+        planned_state: Self::State<'a>,
+        config_state: Self::State<'a>,
+        planned_private_state: Self::PrivateState<'a>,
+        provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)>;
     /// Apply the changes on the resource
-    async fn update(
+    async fn update<'a>(
         &self,
         diags: &mut Diagnostics,
-        prior_state: Self::State,
-        planned_state: Self::State,
-        config_state: Self::State,
-        planned_private_state: Self::PrivateState,
-        provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<(Self::State, Self::PrivateState)>;
+        prior_state: Self::State<'a>,
+        planned_state: Self::State<'a>,
+        config_state: Self::State<'a>,
+        planned_private_state: Self::PrivateState<'a>,
+        provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)>;
     /// Destroy the resource
-    async fn destroy(
+    async fn destroy<'a>(
         &self,
         diags: &mut Diagnostics,
-        prior_state: Self::State,
-        provider_meta_state: Self::ProviderMetaState,
+        prior_state: Self::State<'a>,
+        provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()>;
     /// Import an existing resource
-    async fn import(
+    async fn import<'a>(
         &self,
         diags: &mut Diagnostics,
         id: String,
-    ) -> Option<(Self::State, Self::PrivateState)> {
+    ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         _ = id;
         diags.root_error_short("Import is not supported");
         None
     }
     /// Upgrade the resource
-    async fn upgrade(
+    async fn upgrade<'a>(
         &self,
         diags: &mut Diagnostics,
         version: i64,
         prior_state: RawValue,
-    ) -> Option<Self::State> {
+    ) -> Option<Self::State<'a>> {
         _ = version;
         _ = prior_state;
         diags.root_error_short("Upgrade is not supported");
@@ -210,9 +210,10 @@ impl<T: Resource> DynamicResource for T {
         private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>)> {
+        let private_state = RawValue::MessagePack(private_state);
         let (state, private_state, provider_meta_state) = (
             state.deserialize(diags),
-            RawValue::MessagePack(private_state).deserialize(diags),
+            private_state.deserialize(diags),
             provider_meta_state.deserialize(diags),
         )
             .factor()?;
@@ -266,12 +267,13 @@ impl<T: Resource> DynamicResource for T {
         prior_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>, Vec<AttributePath>)> {
+        let prior_private_state = RawValue::MessagePack(prior_private_state);
         let (prior_state, proposed_state, config_state, prior_private_state, provider_meta_state) =
             (
                 prior_state.deserialize(diags),
                 proposed_state.deserialize(diags),
                 config_state.deserialize(diags),
-                RawValue::MessagePack(prior_private_state).deserialize(diags),
+                prior_private_state.deserialize(diags),
                 provider_meta_state.deserialize(diags),
             )
                 .factor()?;
@@ -302,9 +304,10 @@ impl<T: Resource> DynamicResource for T {
         prior_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<()> {
+        let prior_private_state = RawValue::MessagePack(prior_private_state);
         let (prior_state, prior_private_state, provider_meta_state) = (
             prior_state.deserialize(diags),
-            RawValue::MessagePack(prior_private_state).deserialize(diags),
+            prior_private_state.deserialize(diags),
             provider_meta_state.deserialize(diags),
         )
             .factor()?;
@@ -327,10 +330,11 @@ impl<T: Resource> DynamicResource for T {
         planned_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>)> {
+        let planned_private_state = RawValue::MessagePack(planned_private_state);
         let (planned_state, config_state, planned_private_state, provider_meta_state) = (
             planned_state.deserialize(diags),
             config_state.deserialize(diags),
-            RawValue::MessagePack(planned_private_state).deserialize(diags),
+            planned_private_state.deserialize(diags),
             provider_meta_state.deserialize(diags),
         )
             .factor()?;
@@ -359,12 +363,13 @@ impl<T: Resource> DynamicResource for T {
         planned_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>)> {
+        let planned_private_state = RawValue::MessagePack(planned_private_state);
         let (prior_state, planned_state, config_state, planned_private_state, provider_meta_state) =
             (
                 prior_state.deserialize(diags),
                 planned_state.deserialize(diags),
                 config_state.deserialize(diags),
-                RawValue::MessagePack(planned_private_state).deserialize(diags),
+                planned_private_state.deserialize(diags),
                 provider_meta_state.deserialize(diags),
             )
                 .factor()?;

@@ -4,27 +4,27 @@ use crate::schema::Schema;
 use crate::utils::OptionFactor;
 
 use async_trait::async_trait;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[async_trait]
 /// Trait for implementing a data source
 pub trait DataSource: Send + Sync {
     /// State of the data source
-    type State: Serialize + DeserializeOwned + Send;
+    type State<'a>: Serialize + Deserialize<'a> + Send;
     /// State of the provider metadata
-    type ProviderMetaState: Serialize + DeserializeOwned + Send;
+    type ProviderMetaState<'a>: Serialize + Deserialize<'a> + Send;
 
     /// Get the schema of the data source
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the data source
-    async fn validate(&self, diags: &mut Diagnostics, config: Self::State) -> Option<()>;
+    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()>;
     /// Read the new state of the data source
-    async fn read(
+    async fn read<'a>(
         &self,
         diags: &mut Diagnostics,
-        config: Self::State,
-        provider_meta_state: Self::ProviderMetaState,
-    ) -> Option<Self::State>;
+        config: Self::State<'a>,
+        provider_meta_state: Self::ProviderMetaState<'a>,
+    ) -> Option<Self::State<'a>>;
 }
 
 #[async_trait]
