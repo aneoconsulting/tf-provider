@@ -38,5 +38,8 @@ resource "cmd_local_exec" "test" {
 }
 
 output "exec" {
-  value = cmd_local_exec.test
+  value = {
+    inputs  = cmd_local_exec.test.inputs
+    outputs = cmd_local_exec.test.state
+  }
 }

@@ -11,6 +11,10 @@ pub(crate) trait WithValidate {
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath);
 }
 
+pub(crate) trait WithNormalize {
+    fn normalize(&mut self, diags: &mut Diagnostics);
+}
+
 pub(crate) trait WithCmd {
     fn cmd(&self) -> &str;
 }

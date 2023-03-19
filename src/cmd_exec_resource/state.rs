@@ -33,14 +33,14 @@ where
     pub connection: Value<T>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct StateCmd<'a> {
     #[serde(borrow = "'a")]
     pub cmd: ValueString<'a>,
     pub env: ValueMap<'a, ValueString<'a>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct StateUpdate<'a> {
     #[serde(borrow = "'a")]
     #[serde(flatten)]

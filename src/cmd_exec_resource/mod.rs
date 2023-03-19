@@ -13,9 +13,10 @@ use tf_provider::{
 };
 
 use crate::connection::Connection;
-use crate::utils::{WithCmd, WithValidate};
+use crate::utils::{WithCmd, WithNormalize, WithValidate};
 use crate::utils::{WithEnv, WithSchema};
 
+mod normalize;
 mod read;
 mod state;
 mod validate;
@@ -67,6 +68,7 @@ where
         let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
 
         let mut state = state.clone();
+        state.normalize(diags);
 
         // Mark all values unknown to force their read
         state.state = Value::Value(
@@ -80,45 +82,20 @@ where
 
         state.read_all(diags, &state_env).await;
 
-        if state.inputs.is_null() {
-            state.inputs = Value::Value(Default::default());
-        }
-
         Some((state, private_state))
     }
 
     async fn plan_create<'a>(
         &self,
-        _diags: &mut Diagnostics,
+        diags: &mut Diagnostics,
         proposed_state: Self::State<'a>,
         _config_state: Self::State<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = proposed_state.clone();
         state.id = ValueString::Unknown;
-
-        if state.inputs.is_null() {
-            state.inputs = Value::Value(Default::default());
-        }
-
-        match &state.read {
-            Value::Value(reads) => {
-                // Mark all values unknown to force their read
-                state.state = Value::Value(
-                    reads
-                        .iter()
-                        .map(|(name, _)| (name.clone(), Value::Unknown))
-                        .collect(),
-                );
-            }
-            Value::Null => {
-                state.read = Value::Value(Default::default());
-                state.state = Value::Value(Default::default());
-            }
-            Value::Unknown => {
-                state.state = Value::Unknown;
-            }
-        }
+        state.state = Value::Unknown;
+        state.normalize(diags);
 
         Some((state, Default::default()))
     }
@@ -136,21 +113,55 @@ where
         Vec<tf_provider::attribute_path::AttributePath>,
     )> {
         let mut state = proposed_state.clone();
-        if state.id.is_null() {
-            state.id = ValueString::Unknown;
-        }
-        if state.inputs.is_null() {
-            state.inputs = Value::Value(Default::default());
+        state.normalize(diags);
+
+        let previous_state_default = Default::default();
+        let previous_state = prior_state
+            .state
+            .as_ref()
+            .unwrap_or(&previous_state_default);
+        let previous_reads_default = Default::default();
+        let previous_reads = prior_state.read.as_ref().unwrap_or(&previous_reads_default);
+
+        match &state.read {
+            Value::Value(reads) => {
+                // Mark all values unknown to force their read
+                state.state = Value::Value(
+                    reads
+                        .iter()
+                        .map(|(name, read)| {
+                            (
+                                name.clone(),
+                                match (previous_reads.get(name), previous_state.get(name)) {
+                                    (_, None) => Value::Unknown,
+                                    (None, Some(val)) => val.clone(),
+                                    (Some(previous_read), Some(val)) => {
+                                        if previous_read == read {
+                                            val.clone()
+                                        } else {
+                                            Value::Unknown
+                                        }
+                                    }
+                                },
+                            )
+                        })
+                        .collect(),
+                );
+            }
+            Value::Null => {
+                state.read = Value::Value(Default::default());
+                state.state = Value::Value(Default::default());
+            }
+            Value::Unknown => {
+                state.state = Value::Unknown;
+            }
         }
 
         let modified = find_modified(&prior_state.inputs, &proposed_state.inputs);
         let mut trigger_replace = Default::default();
 
-        diags.root_warning("modified", format!("{:#?}", modified));
-
         if !modified.is_empty() {
             if let Some((update, _)) = find_update(&proposed_state.update, &modified) {
-                diags.root_warning("update", format!("{:#?}", update));
                 if let Value::Value(outputs) = &mut state.state {
                     let reloads_default = Default::default();
                     let reloads = update.reloads.as_ref().unwrap_or(&reloads_default);
@@ -190,6 +201,7 @@ where
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state.clone();
+        state.normalize(diags);
         state.id = ValueString::Value(
             thread_rng()
                 .sample_iter(&Alphanumeric)
@@ -197,9 +209,6 @@ where
                 .map(char::from)
                 .collect(),
         );
-        if !state.inputs.is_value() {
-            state.inputs = Value::Value(Default::default());
-        }
 
         let connection_default = Default::default();
         let connection = planned_state
@@ -270,6 +279,7 @@ where
             .unwrap_or(&connection_default);
 
         let mut state = planned_state.clone();
+        state.normalize(diags);
         if !state.id.is_value() {
             state.id = ValueString::Value(
                 thread_rng()
@@ -278,9 +288,6 @@ where
                     .map(char::from)
                     .collect(),
             );
-        }
-        if !state.inputs.is_value() {
-            state.inputs = Value::Value(Default::default());
         }
 
         let state_env = prepare_envs(&[
