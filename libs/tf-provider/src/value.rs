@@ -54,7 +54,7 @@ pub type ValueString<'a> = Value<Cow<'a, str>>;
 pub type ValueNumber = Value<i64>;
 pub type ValueList<T> = Value<Vec<T>>;
 pub type ValueSet<T> = Value<HashSet<T>>;
-pub type ValueMap<'a, T> = Value<HashMap<Cow<'a, String>, T>>;
+pub type ValueMap<'a, T> = Value<HashMap<Cow<'a, str>, T>>;
 
 pub mod serde_as_vec {
     use anyhow::anyhow;

@@ -25,15 +25,17 @@ impl TryFrom<Output> for ExecutionResult {
 impl Connection for ConnectionLocal {
     const NAME: &'static str = "local";
 
-    async fn execute<'a, I>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
+    async fn execute<'a, I, K, V>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
     where
-        I: IntoIterator<Item = (&'a str, &'a str)> + Send + Sync,
+        I: IntoIterator<Item = (K, V)> + Send + Sync,
+        K: AsRef<str>,
+        V: AsRef<str>,
     {
         if cmd.len() > 0 {
             let mut command = Command::new("sh");
             command.arg("-c").arg(cmd);
             for (k, v) in env.into_iter() {
-                command.env(k, v);
+                command.env(k.as_ref(), v.as_ref());
             }
             Ok(command.output().await?.try_into()?)
         } else {

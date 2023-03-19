@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
 use async_trait::async_trait;
@@ -5,11 +6,13 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
-use tf_provider::{AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty, ValueString};
+use tf_provider::{
+    AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty, ValueMap, ValueString,
+};
 
 use crate::connection::Connection;
-use crate::utils::WithSchema;
-use crate::utils::WithValidate;
+use crate::utils::{WithCmd, WithValidate};
+use crate::utils::{WithEnv, WithSchema};
 
 mod state;
 mod validate;
@@ -60,23 +63,12 @@ where
         let connection_default = Default::default();
         let connection = state.connection.as_ref().unwrap_or(&connection_default);
 
-        let state_env: Vec<_> = state
-            .inputs
-            .iter()
-            .flatten()
-            .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_deref_option()?)))
-            .chain(
-                state
-                    .inputs
-                    .iter()
-                    .flatten()
-                    .filter_map(|(k, v)| Some((format!("STATE_{k}"), v.as_deref_option()?))),
-            )
-            .collect();
+        let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
 
         if let Value::Value(ref reads) = state.read {
             let mut outputs = state
                 .state
+                .clone()
                 .unwrap_or_else(|| HashMap::with_capacity(reads.len()));
             let attr_path = AttributePath::new("read");
 
@@ -85,12 +77,7 @@ where
                     let attr_path = attr_path.clone().key(name).key("cmd");
 
                     let cmd = read.cmd.as_str();
-                    let env = read
-                        .env
-                        .iter()
-                        .flatten()
-                        .filter_map(|(cmd, env)| Some((cmd.as_str(), env.as_deref_option()?)))
-                        .chain(state_env.iter().map(|(k, v)| (k.as_str(), *v)));
+                    let env = with_env(&state_env, &read.env);
 
                     match connection.execute(cmd, env).await {
                         Ok(res) => {
@@ -226,22 +213,13 @@ where
         let connection_default = Default::default();
         let connection = state.connection.as_ref().unwrap_or(&connection_default);
 
-        let state_env: Vec<_> = state
-            .inputs
-            .iter()
-            .flatten()
-            .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_deref_option()?)))
-            .collect();
+        let state_env = prepare_envs(&[(&state.inputs, "INPUT_")]);
 
-        let create_cmd = state
-            .create
-            .as_ref()
-            .and_then(|create| create.cmd.as_deref())
-            .unwrap_or_default();
+        let create_cmd = state.create.cmd();
         if create_cmd != "" {
             let attr_path = AttributePath::new("create").index(0).attribute("cmd");
             match connection
-                .execute(create_cmd, state_env.iter().map(|(k, v)| (k.as_str(), *v)))
+                .execute(create_cmd, with_env(&state_env, state.create.env()))
                 .await
             {
                 Ok(res) => {
@@ -288,14 +266,11 @@ where
                     let attr_path = attr_path.clone().key(name).key("cmd");
 
                     let cmd = read.cmd.as_str();
-                    let env = read
-                        .env
-                        .iter()
-                        .flatten()
-                        .filter_map(|(k, v)| Some((k.as_str(), v.as_deref_option()?)))
-                        .chain(state_env.iter().map(|(k, v)| (k.as_str(), *v)));
 
-                    match connection.execute(cmd, env).await {
+                    match connection
+                        .execute(cmd, with_env(&state_env, &read.env))
+                        .await
+                    {
                         Ok(res) => {
                             if res.status == 0 {
                                 if res.stderr.len() > 0 {
@@ -360,29 +335,13 @@ where
         let connection_default = Default::default();
         let connection = state.connection.as_ref().unwrap_or(&connection_default);
 
-        let state_env: Vec<_> = state
-            .inputs
-            .iter()
-            .flatten()
-            .filter_map(|(k, v)| Some((format!("INPUT_{k}"), v.as_deref_option()?)))
-            .chain(
-                state
-                    .inputs
-                    .iter()
-                    .flatten()
-                    .filter_map(|(k, v)| Some((format!("STATE_{k}"), v.as_deref_option()?))),
-            )
-            .collect();
+        let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
 
-        let destroy_cmd = state
-            .destroy
-            .as_ref()
-            .and_then(|destroy| destroy.cmd.as_deref())
-            .unwrap_or_default();
+        let destroy_cmd = state.destroy.cmd();
         if destroy_cmd != "" {
             let attr_path = AttributePath::new("destroy").index(0).attribute("cmd");
             match connection
-                .execute(destroy_cmd, state_env.iter().map(|(k, v)| (k.as_str(), *v)))
+                .execute(destroy_cmd, with_env(&state_env, state.destroy.env()))
                 .await
             {
                 Ok(res) => {
@@ -416,4 +375,32 @@ where
         }
         Some(())
     }
+}
+
+fn prepare_envs<'a>(
+    envs: &[(&'a ValueMap<'a, ValueString<'a>>, &str)],
+) -> Vec<(Cow<'a, str>, Cow<'a, str>)> {
+    envs.iter()
+        .map(|(env, prefix)| {
+            env.iter().flatten().filter_map(|(k, v)| {
+                Some((
+                    Cow::Owned(format!("{}{}", *prefix, k)),
+                    Cow::Borrowed(v.as_deref_option()?),
+                ))
+            })
+        })
+        .flatten()
+        .collect()
+}
+
+fn with_env<'a>(
+    base_env: &'a Vec<(Cow<'a, str>, Cow<'a, str>)>,
+    extra_env: &'a ValueMap<'a, ValueString<'a>>,
+) -> impl Iterator<Item = (&'a Cow<'a, str>, &'a Cow<'a, str>)> {
+    base_env.iter().map(|(k, v)| (k, v)).chain(
+        extra_env
+            .iter()
+            .flatten()
+            .filter_map(|(k, v)| Some((k, v.as_ref_option()?))),
+    )
 }

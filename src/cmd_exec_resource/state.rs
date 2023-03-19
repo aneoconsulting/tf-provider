@@ -7,7 +7,10 @@ use tf_provider::{
     Schema, Value, ValueList, ValueMap, ValueString,
 };
 
-use crate::{connection::Connection, utils::WithSchema};
+use crate::{
+    connection::Connection,
+    utils::{WithCmd, WithEnv, WithSchema},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct State<'a, T>
@@ -160,5 +163,31 @@ where
                 deprecated: false,
             },
         }
+    }
+}
+
+impl<'a> WithCmd for StateCmd<'a> {
+    fn cmd(&self) -> &str {
+        self.cmd.as_str()
+    }
+}
+impl<'a> WithCmd for StateUpdate<'a> {
+    fn cmd(&self) -> &str {
+        self.cmd.cmd()
+    }
+}
+
+impl<'a> WithEnv for StateCmd<'a> {
+    type Env = ValueMap<'a, ValueString<'a>>;
+
+    fn env(&self) -> &Self::Env {
+        &self.env
+    }
+}
+impl<'a> WithEnv for StateUpdate<'a> {
+    type Env = ValueMap<'a, ValueString<'a>>;
+
+    fn env(&self) -> &Self::Env {
+        &self.cmd.env
     }
 }

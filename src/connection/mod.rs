@@ -18,9 +18,11 @@ pub trait Connection: Send + Sync + 'static + Default {
     const NAME: &'static str;
 
     /// execute a command over the connection
-    async fn execute<'a, I>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
+    async fn execute<'a, I, K, V>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
     where
-        I: IntoIterator<Item = (&'a str, &'a str)> + Send + Sync;
+        I: IntoIterator<Item = (K, V)> + Send + Sync,
+        K: AsRef<str>,
+        V: AsRef<str>;
 
     /// Validate the state is valid
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) -> Option<()>;
