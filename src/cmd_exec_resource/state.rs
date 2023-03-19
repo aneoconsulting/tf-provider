@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use tf_provider::{
     map, value, Attribute, AttributeConstraint, AttributeType, Block, Description, NestedBlock,
-    Schema, Value, ValueList, ValueMap, ValueString,
+    Schema, Value, ValueList, ValueMap, ValueSet, ValueString,
 };
 
 use crate::{
@@ -45,8 +45,8 @@ pub struct StateUpdate<'a> {
     #[serde(borrow = "'a")]
     #[serde(flatten)]
     pub cmd: StateCmd<'a>,
-    pub triggers: ValueMap<'a, ValueString<'a>>,
-    pub reloads: ValueMap<'a, ValueString<'a>>,
+    pub triggers: ValueSet<ValueString<'a>>,
+    pub reloads: ValueSet<ValueString<'a>>,
 }
 
 pub type StateRead<'a> = StateCmd<'a>;
@@ -132,7 +132,7 @@ where
                             "cmd" => cmd_attribute.clone(),
                             "env" => env_attribute.clone(),
                             "triggers" => Attribute {
-                                attr_type: AttributeType::Map(AttributeType::String.into()),
+                                attr_type: AttributeType::Set(AttributeType::String.into()),
                                 description: Description::plain(
                                     "What input changes should trigger this update",
                                 ),
@@ -140,7 +140,7 @@ where
                                 ..Default::default()
                             },
                             "reloads" => Attribute {
-                                attr_type: AttributeType::Map(AttributeType::String.into()),
+                                attr_type: AttributeType::Set(AttributeType::String.into()),
                                 description: Description::plain(
                                     "What outputs should be read again after this update",
                                 ),

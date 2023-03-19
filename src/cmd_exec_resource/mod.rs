@@ -1,5 +1,6 @@
 use std::borrow::Cow;
-use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
+use std::collections::HashSet;
+use std::{fmt::Debug, marker::PhantomData};
 
 use async_trait::async_trait;
 use rand::distributions::Alphanumeric;
@@ -7,17 +8,22 @@ use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use tf_provider::{
-    AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty, ValueMap, ValueString,
+    AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty, ValueList, ValueMap,
+    ValueString,
 };
 
 use crate::connection::Connection;
 use crate::utils::{WithCmd, WithValidate};
 use crate::utils::{WithEnv, WithSchema};
 
+mod read;
 mod state;
 mod validate;
 
 use state::State;
+
+use self::read::WithRead;
+use self::state::StateUpdate;
 
 #[derive(Debug, Default)]
 pub struct CmdExecResource<T: Connection> {
@@ -58,55 +64,21 @@ where
         private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
-        let mut state = state;
-
-        let connection_default = Default::default();
-        let connection = state.connection.as_ref().unwrap_or(&connection_default);
-
         let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
 
-        if let Value::Value(ref reads) = state.read {
-            let mut outputs = state
-                .state
-                .clone()
-                .unwrap_or_else(|| HashMap::with_capacity(reads.len()));
-            let attr_path = AttributePath::new("read");
+        let mut state = state.clone();
 
-            for (name, read) in reads {
-                if let Value::Value(read) = read {
-                    let attr_path = attr_path.clone().key(name).key("cmd");
+        // Mark all values unknown to force their read
+        state.state = Value::Value(
+            state
+                .read
+                .iter()
+                .flatten()
+                .map(|(name, _)| (name.clone(), Value::Unknown))
+                .collect(),
+        );
 
-                    let cmd = read.cmd.as_str();
-                    let env = with_env(&state_env, &read.env);
-
-                    match connection.execute(cmd, env).await {
-                        Ok(res) => {
-                            if res.status == 0 {
-                                if res.stderr.len() > 0 {
-                                    diags.warning(
-                                        "`read` succeeded but stderr was not empty",
-                                        res.stderr,
-                                        attr_path,
-                                    );
-                                }
-
-                                outputs.insert(name.clone(), res.stdout.into());
-                            } else {
-                                diags.warning(
-                                    format!("`read` failed with status code: {}", res.status),
-                                    res.stderr,
-                                    attr_path,
-                                );
-                            }
-                        }
-                        Err(err) => {
-                            diags.warning("Failed to read resource state", err, attr_path);
-                        }
-                    };
-                }
-            }
-            state.state = Value::Value(outputs);
-        }
+        state.read_all(diags, &state_env).await;
 
         if state.inputs.is_null() {
             state.inputs = Value::Value(Default::default());
@@ -117,14 +89,11 @@ where
 
     async fn plan_create<'a>(
         &self,
-        diags: &mut Diagnostics,
+        _diags: &mut Diagnostics,
         proposed_state: Self::State<'a>,
-        config_state: Self::State<'a>,
+        _config_state: Self::State<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
-        diags.root_warning("proposed_state", format!("{:#?}", proposed_state));
-        diags.root_warning("config_state", format!("{:#?}", config_state));
-
         let mut state = proposed_state.clone();
         state.id = ValueString::Unknown;
 
@@ -134,11 +103,13 @@ where
 
         match &state.read {
             Value::Value(reads) => {
-                let mut outputs = HashMap::with_capacity(reads.len());
-                for (k, _) in reads {
-                    outputs.insert(k.clone(), ValueString::Unknown);
-                }
-                state.state = Value::Value(outputs);
+                // Mark all values unknown to force their read
+                state.state = Value::Value(
+                    reads
+                        .iter()
+                        .map(|(name, _)| (name.clone(), Value::Unknown))
+                        .collect(),
+                );
             }
             Value::Null => {
                 state.read = Value::Value(Default::default());
@@ -156,7 +127,7 @@ where
         diags: &mut Diagnostics,
         prior_state: Self::State<'a>,
         proposed_state: Self::State<'a>,
-        config_state: Self::State<'a>,
+        _config_state: Self::State<'a>,
         prior_private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(
@@ -164,10 +135,6 @@ where
         Self::PrivateState<'a>,
         Vec<tf_provider::attribute_path::AttributePath>,
     )> {
-        diags.root_warning("prior_state", format!("{:#?}", prior_state));
-        diags.root_warning("proposed_state", format!("{:#?}", proposed_state));
-        diags.root_warning("config_state", format!("{:#?}", config_state));
-
         let mut state = proposed_state.clone();
         if state.id.is_null() {
             state.id = ValueString::Unknown;
@@ -176,17 +143,41 @@ where
             state.inputs = Value::Value(Default::default());
         }
 
-        Some((state, prior_private_state, vec![]))
+        let modified = find_modified(&prior_state.inputs, &proposed_state.inputs);
+        let mut trigger_replace = Default::default();
+
+        diags.root_warning("modified", format!("{:#?}", modified));
+
+        if !modified.is_empty() {
+            if let Some((update, _)) = find_update(&proposed_state.update, &modified) {
+                diags.root_warning("update", format!("{:#?}", update));
+                if let Value::Value(outputs) = &mut state.state {
+                    let reloads_default = Default::default();
+                    let reloads = update.reloads.as_ref().unwrap_or(&reloads_default);
+                    for name in reloads {
+                        if let Some(value) = outputs.get_mut(name.as_str()) {
+                            *value = Value::Unknown;
+                        }
+                    }
+                }
+            } else {
+                trigger_replace = modified
+                    .into_iter()
+                    .map(|name| AttributePath::new("inputs").key(name.unwrap_or_default()))
+                    .collect();
+            }
+        }
+
+        Some((state, prior_private_state, trigger_replace))
     }
 
     async fn plan_destroy<'a>(
         &self,
-        diags: &mut Diagnostics,
-        prior_state: Self::State<'a>,
+        _diags: &mut Diagnostics,
+        _prior_state: Self::State<'a>,
         _prior_private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()> {
-        diags.root_warning("prior_state", format!("{:#?}", prior_state));
         Some(())
     }
 
@@ -211,9 +202,12 @@ where
         }
 
         let connection_default = Default::default();
-        let connection = state.connection.as_ref().unwrap_or(&connection_default);
+        let connection = planned_state
+            .connection
+            .as_ref()
+            .unwrap_or(&connection_default);
 
-        let state_env = prepare_envs(&[(&state.inputs, "INPUT_")]);
+        let state_env = prepare_envs(&[(&planned_state.inputs, "INPUT_")]);
 
         let create_cmd = state.create.cmd();
         if create_cmd != "" {
@@ -256,60 +250,25 @@ where
             return None;
         }
 
-        // Read all outputs after the resource creation
-        if let Value::Value(ref reads) = state.read {
-            let mut outputs = HashMap::with_capacity(reads.len());
-            let attr_path = AttributePath::new("read");
-
-            for (name, read) in reads {
-                if let Value::Value(read) = read {
-                    let attr_path = attr_path.clone().key(name).key("cmd");
-
-                    let cmd = read.cmd.as_str();
-
-                    match connection
-                        .execute(cmd, with_env(&state_env, &read.env))
-                        .await
-                    {
-                        Ok(res) => {
-                            if res.status == 0 {
-                                if res.stderr.len() > 0 {
-                                    diags.warning(
-                                        "`read` succeeded but stderr was not empty",
-                                        res.stderr,
-                                        attr_path,
-                                    );
-                                }
-
-                                outputs.insert(name.clone(), ValueString::Value(res.stdout.into()));
-                            } else {
-                                diags.error(
-                                    format!("`read` failed with status code: {}", res.status),
-                                    res.stderr,
-                                    attr_path,
-                                );
-                            }
-                        }
-                        Err(err) => {
-                            diags.error("Failed to read resource state", err, attr_path);
-                        }
-                    };
-                }
-            }
-            state.state = Value::Value(outputs);
-        }
+        state.read_all(diags, &state_env).await;
 
         Some((state, planned_private_state))
     }
     async fn update<'a>(
         &self,
-        _diags: &mut Diagnostics,
-        _prior_state: Self::State<'a>,
+        diags: &mut Diagnostics,
+        prior_state: Self::State<'a>,
         planned_state: Self::State<'a>,
         _config_state: Self::State<'a>,
         planned_private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
+        let connection_default = Default::default();
+        let connection = planned_state
+            .connection
+            .as_ref()
+            .unwrap_or(&connection_default);
+
         let mut state = planned_state.clone();
         if !state.id.is_value() {
             state.id = ValueString::Value(
@@ -323,6 +282,57 @@ where
         if !state.inputs.is_value() {
             state.inputs = Value::Value(Default::default());
         }
+
+        let state_env = prepare_envs(&[
+            (&planned_state.inputs, "INPUT_"),
+            (&prior_state.inputs, "PREVIOUS_"),
+            (&prior_state.state, "STATE_"),
+        ]);
+
+        let modified = find_modified(&prior_state.inputs, &planned_state.inputs);
+        if let Some((update, attr_path)) = find_update(&planned_state.update, &modified) {
+            let attr_path = attr_path.attribute("cmd");
+            let update_cmd = update.cmd();
+            if update_cmd != "" {
+                match connection
+                    .execute(update_cmd, with_env(&state_env, update.env()))
+                    .await
+                {
+                    Ok(res) => {
+                        if res.stdout.len() > 0 {
+                            diags.warning(
+                                "`update` stdout was not empty",
+                                res.stdout,
+                                attr_path.clone(),
+                            );
+                        }
+                        if res.status == 0 {
+                            if res.stderr.len() > 0 {
+                                diags.warning(
+                                    "`update` succeeded but stderr was not empty",
+                                    res.stderr,
+                                    attr_path,
+                                );
+                            }
+                        } else {
+                            diags.error(
+                                format!("`update` failed with status code: {}", res.status),
+                                res.stderr,
+                                attr_path,
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        diags.error("Failed to update resource", err, attr_path);
+                    }
+                }
+            } else {
+                diags.error_short("`update` cmd should not be null or empty", attr_path);
+                return None;
+            }
+        }
+
+        state.read_all(diags, &state_env).await;
 
         Some((state, planned_private_state))
     }
@@ -403,4 +413,69 @@ fn with_env<'a>(
             .flatten()
             .filter_map(|(k, v)| Some((k, v.as_ref_option()?))),
     )
+}
+
+fn find_modified<'a>(
+    state: &'a ValueMap<'a, ValueString<'a>>,
+    plan: &'a ValueMap<'a, ValueString<'a>>,
+) -> HashSet<ValueString<'a>> {
+    match (state, plan) {
+        (Value::Value(state), Value::Value(plan)) => {
+            let mut modified = HashSet::with_capacity(std::cmp::max(state.len(), plan.len()));
+
+            for (k, x) in state {
+                if let Some(y) = plan.get(k) {
+                    if x != y {
+                        modified.insert(Value::Value(Cow::from(k.as_ref())));
+                    }
+                } else {
+                    modified.insert(Value::Value(Cow::from(k.as_ref())));
+                }
+            }
+            for (k, _) in plan {
+                if !state.contains_key(k) {
+                    modified.insert(Value::Value(Cow::from(k.as_ref())));
+                }
+            }
+
+            modified
+        }
+        (_, Value::Value(plan)) => plan
+            .keys()
+            .map(|k| Value::Value(Cow::from(k.as_ref())))
+            .collect(),
+        (Value::Value(state), _) => state
+            .keys()
+            .map(|k| Value::Value(Cow::from(k.as_ref())))
+            .collect(),
+        _ => Default::default(),
+    }
+}
+
+fn find_update<'a>(
+    updates: &'a ValueList<Value<StateUpdate<'a>>>,
+    modified: &'a HashSet<ValueString<'a>>,
+) -> Option<(&'a StateUpdate<'a>, AttributePath)> {
+    let empty_set = Default::default();
+    let updates = updates.as_ref_option()?;
+
+    let mut found: Option<(&'a StateUpdate<'a>, usize)> = None;
+    for (i, update) in updates.iter().flatten().enumerate() {
+        let triggers = update.triggers.as_ref().unwrap_or(&empty_set);
+        if triggers.is_empty() {
+            if found.is_none() {
+                found = Some((update, i));
+            }
+        } else if triggers.is_superset(&modified) {
+            if let Some((previous, _)) = found {
+                let previous_triggers = previous.triggers.as_ref().unwrap_or(&empty_set);
+                if previous_triggers.len() > triggers.len() {
+                    found = Some((update, i));
+                }
+            } else {
+                found = Some((update, i));
+            }
+        }
+    }
+    found.map(|(update, i)| (update, AttributePath::new("update").index(i as i64)))
 }

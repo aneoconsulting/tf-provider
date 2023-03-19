@@ -16,7 +16,7 @@ resource "null_resource" "pouet" {
 
 resource "cmd_local_exec" "test" {
   inputs = {
-    pouet = null_resource.pouet.id
+    a = null_resource.pouet.id
   }
 
   create {
@@ -26,8 +26,14 @@ resource "cmd_local_exec" "test" {
     cmd = "env | grep -P 'INPUT|STATE|HOME'"
   }
 
+  update {
+    triggers = ["a"]
+    cmd      = "echo update a"
+    reloads  = ["plop"]
+  }
+
   read "plop" {
-    cmd = "env | grep -P 'INPUT|STATE|HOME'"
+    cmd = "echo -n plop"
   }
 }
 

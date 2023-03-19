@@ -30,19 +30,18 @@ impl WithValidate for super::state::StateCmd<'_> {
 impl WithValidate for super::state::StateUpdate<'_> {
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
         _ = self.cmd.validate(diags, attr_path.clone());
-        for (name, map) in [("triggers", &self.triggers), ("reloads", &self.reloads)] {
+        for (name, set) in [("triggers", &self.triggers), ("reloads", &self.reloads)] {
             let attr_path = attr_path.clone().attribute(name);
-            match map {
-                Value::Value(map) => {
-                    for (k, v) in map {
-                        let attr_path = attr_path.clone().key(k);
-                        match v.as_ref() {
-                            Value::Value(v) => {
-                                if v.len() == 0 {
+            match set {
+                Value::Value(set) => {
+                    for k in set {
+                        match k {
+                            Value::Value(k) => {
+                                if k.len() == 0 {
                                     diags.error(
                                         format!("Element of `update.{}` is empty", name),
                                         format!("Elements of `update.{}` cannot be empty.", name),
-                                        attr_path,
+                                        attr_path.clone().key(k),
                                     );
                                 }
                             }
@@ -50,7 +49,7 @@ impl WithValidate for super::state::StateUpdate<'_> {
                                 diags.error(
                                     format!("Element of `update.{}` is null", name),
                                     format!("Elements of `update.{}` cannot be null.", name),
-                                    attr_path,
+                                    attr_path.clone(),
                                 );
                             }
                             Value::Unknown => {
@@ -60,7 +59,7 @@ impl WithValidate for super::state::StateUpdate<'_> {
                                         name
                                     ),
                                     format!("Elements of `update.{}` cannot be unkown.", name),
-                                    attr_path,
+                                    attr_path.clone(),
                                 );
                             }
                         }
