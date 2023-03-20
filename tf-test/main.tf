@@ -27,8 +27,18 @@ resource "cmd_local_exec" "test" {
   }
 
   update {
-    triggers = ["a"]
-    cmd      = "echo update a"
+    triggers = ["a", "b"]
+    cmd      = "echo update a b"
+    reloads  = ["plop"]
+  }
+  update {
+    triggers = ["b", "c"]
+    cmd      = "echo update b c"
+    reloads  = ["plop"]
+  }
+  update {
+    triggers = ["b", "d"]
+    cmd      = "echo update b"
     reloads  = ["plop"]
   }
 

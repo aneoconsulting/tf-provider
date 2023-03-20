@@ -1,3 +1,8 @@
+use std::borrow::Cow;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashSet;
+use std::hash::Hasher;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -5,6 +10,8 @@ use tf_provider::{AttributePath, Diagnostics, Value};
 
 use crate::connection::Connection;
 use crate::utils::WithValidate;
+
+use super::state::StateUpdate;
 
 #[async_trait]
 impl WithValidate for super::state::StateCmd<'_> {
@@ -88,14 +95,14 @@ where
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
         if let Value::Value(connection) = &self.connection {
             _ = connection
-                .validate(diags, attr_path.clone().attribute("connection"))
+                .validate(diags, attr_path.clone().attribute("connection").index(0))
                 .await;
         }
         if let Value::Value(create) = &self.create {
-            _ = create.validate(diags, attr_path.clone().attribute("create"))
+            _ = create.validate(diags, attr_path.clone().attribute("create").index(0))
         }
         if let Value::Value(destroy) = &self.destroy {
-            _ = destroy.validate(diags, attr_path.clone().attribute("destroy"))
+            _ = destroy.validate(diags, attr_path.clone().attribute("destroy").index(0))
         }
         match &self.read {
             Value::Value(read) => {
@@ -115,12 +122,28 @@ where
                 );
             }
         }
+
+        let reads_default = Default::default();
+        let reads = self.read.as_ref().unwrap_or(&reads_default);
         match &self.update {
-            Value::Value(update) => {
-                for (i, update) in update.into_iter().enumerate() {
+            Value::Value(updates) => {
+                ensure_unambiguous_updates(diags, updates.as_slice());
+                for (i, update) in updates.into_iter().enumerate() {
                     if let Value::Value(update) = update {
-                        _ = update
-                            .validate(diags, attr_path.clone().attribute("update").index(i as i64));
+                        let attr_path = attr_path.clone().attribute("update").index(i as i64);
+                        _ = update.validate(diags, attr_path.clone());
+
+                        if let Value::Value(reloads) = &update.reloads {
+                            for name in reloads {
+                                if !reads.contains_key(name.as_str()) {
+                                    diags.error(
+                                        "`update.reloads` is invalid",
+                                        format!("The `update` block requires to reload `{name}`, but there is no `read` block with this name."),
+                                        attr_path.clone().attribute("reloads").key(name.as_str())
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -132,6 +155,83 @@ where
                     attr_path.clone().attribute("update"),
                 );
             }
+        }
+    }
+}
+
+fn ensure_unambiguous_updates<'a>(diags: &mut Diagnostics, updates: &'a [Value<StateUpdate<'a>>]) {
+    #[derive(PartialEq, Eq)]
+    struct Triggers<'a, 'b>(&'a HashSet<Value<Cow<'b, str>>>);
+    impl<'a, 'b> std::hash::Hash for Triggers<'a, 'b> {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            let mut h = 0u64;
+
+            for elt in self.0 {
+                let mut hasher = DefaultHasher::new();
+                elt.hash(&mut hasher);
+                h ^= hasher.finish();
+            }
+
+            h.hash(state);
+        }
+    }
+    impl<'a, 'b> std::fmt::Display for Triggers<'a, 'b> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut sep = "";
+            f.write_str("[")?;
+            for elt in self.0 {
+                f.write_str(sep)?;
+                f.write_str(elt.as_str())?;
+                sep = ",";
+            }
+            f.write_str("]")?;
+            Ok(())
+        }
+    }
+    let default_triggers = Default::default();
+    let mut seen = HashSet::new();
+    let mut conflicts = Vec::new();
+
+    for (i, update0) in updates.iter().flatten().enumerate() {
+        let attr_path = AttributePath::new("update")
+            .index(i as i64)
+            .attribute("triggers");
+        let triggers0 = update0.triggers.as_ref().unwrap_or(&default_triggers);
+        if !seen.insert(Triggers(triggers0)) {
+            diags.error(
+                "Duplicate `update`",
+                format!(
+                    "There is multiple `update` blocks that are triggered by {}.",
+                    Triggers(triggers0)
+                ),
+                attr_path.clone(),
+            );
+        }
+        for update1 in updates.iter().flatten().skip(i + 1) {
+            let triggers1 = update1.triggers.as_ref().unwrap_or(&default_triggers);
+            if !triggers0.is_subset(triggers1) && !triggers1.is_subset(triggers0) {
+                let intersection: HashSet<_> = triggers0
+                    .intersection(triggers1)
+                    .map(Clone::clone)
+                    .collect();
+                if !intersection.is_empty() {
+                    conflicts.push((intersection, triggers0, triggers1));
+                }
+            }
+        }
+    }
+
+    for (ref conflict, triggers0, triggers1) in conflicts {
+        if !seen.contains(&Triggers(conflict)) {
+            diags.root_error(
+                "`update` ambiguity",
+                format!(
+                    "The update of {} is ambiguous as it triggers both the {} update block and the {} update block.",
+                    Triggers(conflict),
+                    Triggers(triggers0),
+                    Triggers(triggers1),
+                ),
+            );
         }
     }
 }
