@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use async_trait::async_trait;
 
 use tf_provider::{AttributePath, Diagnostics, Schema, Value};
@@ -37,5 +39,51 @@ where
     type Env = T::Env;
     fn env(&self) -> &Self::Env {
         self.as_ref().map_or(&Value::Null, WithEnv::env)
+    }
+}
+
+pub struct DisplayJoiner<'a, T, I>
+where
+    T: Iterator<Item = I>,
+    I: std::fmt::Display,
+{
+    iter: RefCell<T>,
+    sep: &'a str,
+}
+
+pub trait DisplayJoinable {
+    type Joiner<'a>;
+    fn join_with<'a>(self, sep: &'a str) -> Self::Joiner<'a>;
+}
+
+impl<T, I> DisplayJoinable for T
+where
+    T: Iterator<Item = I>,
+    I: std::fmt::Display,
+{
+    type Joiner<'a> = DisplayJoiner<'a, T, I>;
+
+    fn join_with<'a>(self, sep: &'a str) -> Self::Joiner<'a> {
+        DisplayJoiner {
+            iter: RefCell::new(self),
+            sep,
+        }
+    }
+}
+
+impl<'a, T, I> std::fmt::Display for DisplayJoiner<'a, T, I>
+where
+    T: Iterator<Item = I>,
+    I: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut sep = "";
+        let mut iter = self.iter.try_borrow_mut().or(Err(std::fmt::Error))?;
+        while let Some(elt) = iter.next() {
+            f.write_str(sep)?;
+            f.write_fmt(format_args!("{elt}"))?;
+            sep = self.sep;
+        }
+        Ok(())
     }
 }

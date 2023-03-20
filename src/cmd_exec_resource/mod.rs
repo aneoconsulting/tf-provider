@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::{fmt::Debug, marker::PhantomData};
 
 use async_trait::async_trait;
@@ -425,10 +425,10 @@ fn with_env<'a>(
 fn find_modified<'a>(
     state: &'a ValueMap<'a, ValueString<'a>>,
     plan: &'a ValueMap<'a, ValueString<'a>>,
-) -> HashSet<ValueString<'a>> {
+) -> BTreeSet<ValueString<'a>> {
     match (state, plan) {
         (Value::Value(state), Value::Value(plan)) => {
-            let mut modified = HashSet::with_capacity(std::cmp::max(state.len(), plan.len()));
+            let mut modified = BTreeSet::new();
 
             for (k, x) in state {
                 if let Some(y) = plan.get(k) {
@@ -461,7 +461,7 @@ fn find_modified<'a>(
 
 fn find_update<'a>(
     updates: &'a ValueList<Value<StateUpdate<'a>>>,
-    modified: &'a HashSet<ValueString<'a>>,
+    modified: &'a BTreeSet<ValueString<'a>>,
 ) -> Option<(&'a StateUpdate<'a>, AttributePath)> {
     let empty_set = Default::default();
     let updates = updates.as_ref_option()?;

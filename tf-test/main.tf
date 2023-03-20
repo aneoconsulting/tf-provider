@@ -38,6 +38,11 @@ resource "cmd_local_exec" "test" {
   }
   update {
     triggers = ["b", "d"]
+    cmd      = "echo update b d"
+    reloads  = ["plop"]
+  }
+  update {
+    triggers = ["b"]
     cmd      = "echo update b"
     reloads  = ["plop"]
   }

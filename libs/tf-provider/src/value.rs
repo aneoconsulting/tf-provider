@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Display},
     iter::FusedIterator,
     mem,
@@ -28,7 +28,7 @@ pub enum ValueAny {
     Number(i64),
     Bool(bool),
     List(Vec<ValueAny>),
-    Map(HashMap<String, ValueAny>),
+    Map(BTreeMap<String, ValueAny>),
     #[default]
     Null,
     #[serde(with = "serde_unknown")]
@@ -53,8 +53,8 @@ pub type ValueEmpty = Value<StructEmpty>;
 pub type ValueString<'a> = Value<Cow<'a, str>>;
 pub type ValueNumber = Value<i64>;
 pub type ValueList<T> = Value<Vec<T>>;
-pub type ValueSet<T> = Value<HashSet<T>>;
-pub type ValueMap<'a, T> = Value<HashMap<Cow<'a, str>, T>>;
+pub type ValueSet<T> = Value<BTreeSet<T>>;
+pub type ValueMap<'a, T> = Value<BTreeMap<Cow<'a, str>, T>>;
 
 pub mod serde_as_vec {
     use anyhow::anyhow;

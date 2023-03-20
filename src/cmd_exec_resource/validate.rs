@@ -1,7 +1,4 @@
-use std::borrow::Cow;
-use std::collections::hash_map::DefaultHasher;
-use std::collections::HashSet;
-use std::hash::Hasher;
+use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -9,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use tf_provider::{AttributePath, Diagnostics, Value};
 
 use crate::connection::Connection;
-use crate::utils::WithValidate;
+use crate::utils::{DisplayJoinable, WithValidate};
 
 use super::state::StateUpdate;
 
@@ -160,49 +157,21 @@ where
 }
 
 fn ensure_unambiguous_updates<'a>(diags: &mut Diagnostics, updates: &'a [Value<StateUpdate<'a>>]) {
-    #[derive(PartialEq, Eq)]
-    struct Triggers<'a, 'b>(&'a HashSet<Value<Cow<'b, str>>>);
-    impl<'a, 'b> std::hash::Hash for Triggers<'a, 'b> {
-        fn hash<H: Hasher>(&self, state: &mut H) {
-            let mut h = 0u64;
-
-            for elt in self.0 {
-                let mut hasher = DefaultHasher::new();
-                elt.hash(&mut hasher);
-                h ^= hasher.finish();
-            }
-
-            h.hash(state);
-        }
-    }
-    impl<'a, 'b> std::fmt::Display for Triggers<'a, 'b> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let mut sep = "";
-            f.write_str("[")?;
-            for elt in self.0 {
-                f.write_str(sep)?;
-                f.write_str(elt.as_str())?;
-                sep = ",";
-            }
-            f.write_str("]")?;
-            Ok(())
-        }
-    }
     let default_triggers = Default::default();
-    let mut seen = HashSet::new();
-    let mut conflicts = Vec::new();
+    let mut seen = BTreeSet::new();
+    let mut conflicts = BTreeMap::new();
 
     for (i, update0) in updates.iter().flatten().enumerate() {
         let attr_path = AttributePath::new("update")
             .index(i as i64)
             .attribute("triggers");
         let triggers0 = update0.triggers.as_ref().unwrap_or(&default_triggers);
-        if !seen.insert(Triggers(triggers0)) {
+        if !seen.insert(triggers0) {
             diags.error(
                 "Duplicate `update`",
                 format!(
-                    "There is multiple `update` blocks that are triggered by {}.",
-                    Triggers(triggers0)
+                    "There is multiple `update` blocks that are triggered by [{}].",
+                    triggers0.iter().join_with(","),
                 ),
                 attr_path.clone(),
             );
@@ -210,26 +179,29 @@ fn ensure_unambiguous_updates<'a>(diags: &mut Diagnostics, updates: &'a [Value<S
         for update1 in updates.iter().flatten().skip(i + 1) {
             let triggers1 = update1.triggers.as_ref().unwrap_or(&default_triggers);
             if !triggers0.is_subset(triggers1) && !triggers1.is_subset(triggers0) {
-                let intersection: HashSet<_> = triggers0
+                let intersection: BTreeSet<_> = triggers0
                     .intersection(triggers1)
                     .map(Clone::clone)
                     .collect();
                 if !intersection.is_empty() {
-                    conflicts.push((intersection, triggers0, triggers1));
+                    let conflicting_triggers: &mut BTreeSet<_> =
+                        conflicts.entry(intersection).or_insert(Default::default());
+                    conflicting_triggers.insert(triggers0);
+                    conflicting_triggers.insert(triggers1);
                 }
             }
         }
     }
 
-    for (ref conflict, triggers0, triggers1) in conflicts {
-        if !seen.contains(&Triggers(conflict)) {
+    for (conflict, conflicting_triggers) in conflicts {
+        if !seen.contains(&conflict) {
             diags.root_error(
                 "`update` ambiguity",
                 format!(
-                    "The update of {} is ambiguous as it triggers both the {} update block and the {} update block.",
-                    Triggers(conflict),
-                    Triggers(triggers0),
-                    Triggers(triggers1),
+                    "The update of [{}] is ambiguous and would trigger the following `update` blocks: [{}].\nYou can disambiguate the update by adding a new `update` block with `triggers = [{}]`",
+                    conflict.iter().join_with(","),
+                    conflicting_triggers.iter().map(|t| t.iter().join_with(",")).join_with("], ["),
+                    conflict.iter().join_with(","),
                 ),
             );
         }
