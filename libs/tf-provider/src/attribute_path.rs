@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{borrow::Cow, fmt::Display};
 
 use crate::tfplugin6;
 
@@ -10,18 +10,18 @@ pub struct AttributePath {
 
 impl AttributePath {
     /// Create a new attribute path with the `root` attribute
-    pub fn new<T: ToString>(root: T) -> Self {
+    pub fn new<T: Into<Cow<'static, str>>>(root: T) -> Self {
         Self {
-            steps: vec![AttributePathStep::Attribute(root.to_string())],
+            steps: vec![AttributePathStep::Attribute(root.into())],
         }
     }
     /// Create a new attribute path where the attribute `.name` has been appended
-    pub fn attribute<T: ToString>(mut self, name: T) -> Self {
+    pub fn attribute<T: Into<Cow<'static, str>>>(mut self, name: T) -> Self {
         self.add_attribute(name);
         self
     }
     /// Create a new attribute path where the access `["key"]` has been appended
-    pub fn key<T: ToString>(mut self, key: T) -> Self {
+    pub fn key<T: Into<Cow<'static, str>>>(mut self, key: T) -> Self {
         self.add_key(key);
         self
     }
@@ -32,14 +32,13 @@ impl AttributePath {
     }
 
     /// add name access to the path (ie: `.name`)
-    pub fn add_attribute<T: ToString>(&mut self, name: T) -> &mut Self {
-        self.steps
-            .push(AttributePathStep::Attribute(name.to_string()));
+    pub fn add_attribute<T: Into<Cow<'static, str>>>(&mut self, name: T) -> &mut Self {
+        self.steps.push(AttributePathStep::Attribute(name.into()));
         self
     }
     /// add key access to the path (ie: `["key"]`)
-    pub fn add_key<T: ToString>(&mut self, key: T) -> &mut Self {
-        self.steps.push(AttributePathStep::Key(key.to_string()));
+    pub fn add_key<T: Into<Cow<'static, str>>>(&mut self, key: T) -> &mut Self {
+        self.steps.push(AttributePathStep::Key(key.into()));
         self
     }
     /// add index access to the path (ie: `[idx]`)
@@ -106,15 +105,15 @@ impl From<AttributePath> for tfplugin6::AttributePath {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum AttributePathStep {
-    Attribute(String),
-    Key(String),
+    Attribute(Cow<'static, str>),
+    Key(Cow<'static, str>),
     Index(i64),
 }
 
 impl Display for AttributePathStep {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AttributePathStep::Attribute(name) => f.write_str(name),
+            AttributePathStep::Attribute(name) => f.write_str(name.as_ref()),
             AttributePathStep::Key(key) => f.write_fmt(format_args!("[{:?}]", key)),
             AttributePathStep::Index(idx) => f.write_fmt(format_args!("[{}]", idx)),
         }
@@ -135,8 +134,8 @@ impl From<AttributePathStep> for tfplugin6::attribute_path::Step {
         use tfplugin6::attribute_path::step::Selector;
         Self {
             selector: Some(match value {
-                AttributePathStep::Attribute(name) => Selector::AttributeName(name),
-                AttributePathStep::Key(key) => Selector::ElementKeyString(key),
+                AttributePathStep::Attribute(name) => Selector::AttributeName(name.into_owned()),
+                AttributePathStep::Key(key) => Selector::ElementKeyString(key.into_owned()),
                 AttributePathStep::Index(idx) => Selector::ElementKeyInt(idx),
             }),
         }

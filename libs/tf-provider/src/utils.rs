@@ -58,7 +58,7 @@ where
         match self {
             Ok(value) => Some(value),
             Err(err) => {
-                diags.root_error("Internal error", err);
+                diags.root_error("Internal error", err.to_string());
                 None
             }
         }

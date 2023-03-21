@@ -42,7 +42,9 @@ where
                 continue;
             }
             if let Some(Value::Value(read)) = reads.get(name) {
-                let attr_path = AttributePath::new("read").key(name).attribute("cmd");
+                let attr_path = AttributePath::new("read")
+                    .key(name.to_string())
+                    .attribute("cmd");
                 let cmd = read.cmd.as_str();
 
                 match connection.execute(cmd, with_env(&env, &read.env)).await {
@@ -66,14 +68,14 @@ where
                         }
                     }
                     Err(err) => {
-                        diags.warning("Failed to read resource state", err, attr_path);
+                        diags.warning("Failed to read resource state", err.to_string(), attr_path);
                     }
                 };
             } else {
                 diags.error(
                     "Unknown output has no `read` block associated",
                     format!("The output `state.{name}` is unknown, and there is no known `read[\"{name}\"]` block to give it a value."),
-                    AttributePath::new("state").key(name)
+                    AttributePath::new("state").key(name.to_string())
                 );
             }
         }

@@ -45,7 +45,7 @@ impl WithValidate for super::state::StateUpdate<'_> {
                                     diags.error(
                                         format!("Element of `update.{}` is empty", name),
                                         format!("Elements of `update.{}` cannot be empty.", name),
-                                        attr_path.clone().key(k),
+                                        attr_path.clone().key(k.to_string()),
                                     );
                                 }
                             }
@@ -106,7 +106,7 @@ where
                 let attr_path = attr_path.clone().attribute("read");
                 for (name, read) in read {
                     if let Value::Value(read) = read {
-                        _ = read.validate(diags, attr_path.clone().key(name));
+                        _ = read.validate(diags, attr_path.clone().key(name.to_string()));
                     }
                 }
             }
@@ -136,7 +136,7 @@ where
                                     diags.error(
                                         "`update.reloads` is invalid",
                                         format!("The `update` block requires to reload `{name}`, but there is no `read` block with this name."),
-                                        attr_path.clone().attribute("reloads").key(name.as_str())
+                                        attr_path.clone().attribute("reloads").key(name.to_string())
                                     );
                                 }
                             }

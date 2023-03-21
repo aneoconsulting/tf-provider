@@ -1,4 +1,7 @@
-use std::backtrace::{Backtrace, BacktraceStatus};
+use std::{
+    backtrace::{Backtrace, BacktraceStatus},
+    borrow::Cow,
+};
 
 use crate::{attribute_path::AttributePath, tfplugin6, utils::CollectDiagnostics};
 
@@ -21,7 +24,7 @@ impl Diagnostics {
         self.warnings.push(diag)
     }
     /// Add an error
-    pub fn error<S: ToString, D: ToString>(
+    pub fn error<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
         &mut self,
         summary: S,
         detail: D,
@@ -30,20 +33,28 @@ impl Diagnostics {
         self.add_error(Diagnostic::new(summary, detail, attribute))
     }
     /// Add an error without AttributePath
-    pub fn root_error<S: ToString, D: ToString>(&mut self, summary: S, detail: D) {
+    pub fn root_error<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
+        &mut self,
+        summary: S,
+        detail: D,
+    ) {
         self.add_error(Diagnostic::root(summary, detail))
     }
     /// Add an error without details
-    pub fn error_short<S: ToString>(&mut self, summary: S, attribute: AttributePath) {
+    pub fn error_short<S: Into<Cow<'static, str>>>(
+        &mut self,
+        summary: S,
+        attribute: AttributePath,
+    ) {
         self.add_error(Diagnostic::short(summary, attribute))
     }
     /// Add an error without AttributePath nor details
-    pub fn root_error_short<S: ToString>(&mut self, summary: S) {
+    pub fn root_error_short<S: Into<Cow<'static, str>>>(&mut self, summary: S) {
         self.add_error(Diagnostic::root_short(summary))
     }
 
     /// Add a warning
-    pub fn warning<S: ToString, D: ToString>(
+    pub fn warning<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
         &mut self,
         summary: S,
         detail: D,
@@ -52,15 +63,23 @@ impl Diagnostics {
         self.add_warning(Diagnostic::new(summary, detail, attribute))
     }
     /// Add a warning without AttributePath
-    pub fn root_warning<S: ToString, D: ToString>(&mut self, summary: S, detail: D) {
+    pub fn root_warning<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
+        &mut self,
+        summary: S,
+        detail: D,
+    ) {
         self.add_warning(Diagnostic::root(summary, detail))
     }
     /// Add a warning without details
-    pub fn warning_short<S: ToString>(&mut self, summary: S, attribute: AttributePath) {
+    pub fn warning_short<S: Into<Cow<'static, str>>>(
+        &mut self,
+        summary: S,
+        attribute: AttributePath,
+    ) {
         self.add_warning(Diagnostic::short(summary, attribute))
     }
     /// Add a warning without AttributePath nor details
-    pub fn root_warning_short<S: ToString>(&mut self, summary: S) {
+    pub fn root_warning_short<S: Into<Cow<'static, str>>>(&mut self, summary: S) {
         self.add_warning(Diagnostic::root_short(summary))
     }
     /// Add
@@ -76,40 +95,47 @@ impl Diagnostics {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Diagnostic {
-    pub summary: String,
-    pub detail: String,
+    pub summary: Cow<'static, str>,
+    pub detail: Cow<'static, str>,
     pub attribute: AttributePath,
 }
 
 /// Diagnostic
 impl Diagnostic {
     /// Create a diagnostic
-    pub fn new<S: ToString, D: ToString>(summary: S, detail: D, attribute: AttributePath) -> Self {
+    pub fn new<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
+        summary: S,
+        detail: D,
+        attribute: AttributePath,
+    ) -> Self {
         let backtrace = Backtrace::capture();
-        let mut detail = detail.to_string();
+        let mut detail = detail.into();
         if backtrace.status() == BacktraceStatus::Captured {
             if detail.is_empty() {
-                detail = format!("{}", backtrace);
+                detail = format!("{}", backtrace).into();
             } else {
-                detail = format!("{}\n{}", detail, backtrace);
+                detail = format!("{}\n{}", detail, backtrace).into();
             }
         }
         Self {
-            summary: summary.to_string(),
+            summary: summary.into(),
             detail: detail,
             attribute,
         }
     }
     /// Create a diagnostic without AttributePath
-    pub fn root<S: ToString, D: ToString>(summary: S, detail: D) -> Self {
+    pub fn root<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
+        summary: S,
+        detail: D,
+    ) -> Self {
         Self::new(summary, detail, Default::default())
     }
     /// Create a diagnostic without details
-    pub fn short<S: ToString>(summary: S, attribute: AttributePath) -> Self {
+    pub fn short<S: Into<Cow<'static, str>>>(summary: S, attribute: AttributePath) -> Self {
         Self::new(summary, String::default(), attribute)
     }
     /// Create a diagnostic AttributePath nor details
-    pub fn root_short<S: ToString>(summary: S) -> Self {
+    pub fn root_short<S: Into<Cow<'static, str>>>(summary: S) -> Self {
         Self::new(summary, String::default(), Default::default())
     }
 }
@@ -120,8 +146,8 @@ impl From<Diagnostics> for ::prost::alloc::vec::Vec<tfplugin6::Diagnostic> {
         let map_cvt = |vec: Vec<Diagnostic>, severity: Severity| {
             vec.into_iter().map(move |diag| tfplugin6::Diagnostic {
                 severity: severity.into(),
-                summary: diag.summary,
-                detail: diag.detail,
+                summary: diag.summary.into_owned(),
+                detail: diag.detail.into_owned(),
                 attribute: if diag.attribute.steps.is_empty() {
                     None
                 } else {

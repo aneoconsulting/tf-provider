@@ -45,7 +45,7 @@ impl RawValue {
                 match serde_json::from_slice::<T>(slice) {
                     Ok(value) => Some(value),
                     Err(err) => {
-                        diags.root_error_short(err);
+                        diags.root_error_short(err.to_string());
                         None
                     }
                 }
@@ -60,7 +60,7 @@ impl RawValue {
         match rmp_serde::to_vec_named(value) {
             Ok(value) => Some(value),
             Err(err) => {
-                diags.root_error_short(err);
+                diags.root_error_short(err.to_string());
                 None
             }
         }

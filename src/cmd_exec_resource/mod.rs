@@ -174,7 +174,9 @@ where
             } else {
                 trigger_replace = modified
                     .into_iter()
-                    .map(|name| AttributePath::new("inputs").key(name.unwrap_or_default()))
+                    .map(|name| {
+                        AttributePath::new("inputs").key(name.unwrap_or_default().into_owned())
+                    })
                     .collect();
             }
         }
@@ -250,7 +252,7 @@ where
                     }
                 }
                 Err(err) => {
-                    diags.error("Failed to create resource", err, attr_path);
+                    diags.error("Failed to create resource", err.to_string(), attr_path);
                 }
             }
         }
@@ -330,7 +332,7 @@ where
                         }
                     }
                     Err(err) => {
-                        diags.error("Failed to update resource", err, attr_path);
+                        diags.error("Failed to update resource", err.to_string(), attr_path);
                     }
                 }
             } else {
@@ -386,7 +388,7 @@ where
                     }
                 }
                 Err(err) => {
-                    diags.error("Failed to destroy resource", err, attr_path);
+                    diags.error("Failed to destroy resource", err.to_string(), attr_path);
                 }
             }
         }
