@@ -470,6 +470,15 @@ impl<'a> Value<Cow<'a, str>> {
             _ => "".as_bytes(),
         }
     }
+    #[inline]
+    pub fn extend<'b>(self) -> Value<Cow<'b, str>> {
+        match self {
+            Value::Value(Cow::Borrowed(s)) => Value::Value(Cow::from(s.to_owned())),
+            Value::Value(Cow::Owned(s)) => Value::Value(Cow::from(s)),
+            Value::Null => Value::Null,
+            Value::Unknown => Value::Unknown,
+        }
+    }
 }
 impl<'a> Value<&'a Cow<'a, str>> {
     #[inline]

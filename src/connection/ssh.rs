@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write, sync::Arc};
+use std::{collections::HashMap, io::Write, pin::Pin, sync::Arc};
 
 use crate::connection::{Connection, ExecutionResult};
 use anyhow::{anyhow, Error, Result};
@@ -9,9 +9,37 @@ use tf_provider::{
     map, Attribute, AttributeConstraint, AttributePath, AttributeType, Description, Diagnostics,
     Value, ValueString,
 };
+use tokio::sync::Mutex;
 
-#[derive(Debug, Default, Clone)]
-pub struct ConnectionSsh {}
+#[derive(Default, Clone)]
+pub struct ConnectionSsh {
+    clients: Arc<Mutex<HashMap<ConnectionSshConfig<'static>, Arc<Client>>>>,
+}
+
+impl ConnectionSsh {
+    async fn get_client<'a, 'b>(&'a self, config: &ConnectionSshConfig<'b>) -> Result<Arc<Client>> {
+        let mut clients = self.clients.lock().await;
+        let client = match clients.entry(config.clone().extend()) {
+            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let client = Client::connect(entry.key()).await?;
+                entry.insert(Arc::new(client))
+            }
+        };
+
+        Ok(client.clone())
+    }
+}
+
+impl Drop for ConnectionSsh {
+    fn drop(&mut self) {
+        let clients = Pin::new(futures::executor::block_on(self.clients.lock()));
+
+        for (_, client) in clients.iter() {
+            _ = futures::executor::block_on(client.disconnect());
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Hash, Default, Clone)]
 pub struct ConnectionSshConfig<'a> {
@@ -21,6 +49,19 @@ pub struct ConnectionSshConfig<'a> {
     pub password: ValueString<'a>,
     pub key: ValueString<'a>,
     pub keyfile: ValueString<'a>,
+}
+
+impl<'a> ConnectionSshConfig<'a> {
+    fn extend<'b>(self) -> ConnectionSshConfig<'b> {
+        ConnectionSshConfig {
+            host: self.host.extend(),
+            port: self.port,
+            user: self.user.extend(),
+            password: self.password.extend(),
+            key: self.key.extend(),
+            keyfile: self.keyfile.extend(),
+        }
+    }
 }
 
 #[async_trait]
@@ -40,9 +81,9 @@ impl Connection for ConnectionSsh {
         V: AsRef<str>,
     {
         _ = env;
-        let client = Client::connect(&config).await?;
+
+        let client = self.get_client(config).await?;
         let result = client.execute(cmd).await?;
-        client.disconnect().await?;
         Ok(result)
     }
 
@@ -114,6 +155,13 @@ impl Connection for ConnectionSsh {
                 ..Default::default()
             },
         }
+    }
+}
+
+impl std::fmt::Debug for ConnectionSsh {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectionSsh") /*.field("clients", &self.clients)*/
+            .finish()
     }
 }
 

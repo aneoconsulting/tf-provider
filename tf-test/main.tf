@@ -55,6 +55,9 @@ resource "cmd_ssh_exec" "test" {
   read "plop" {
     cmd = "echo -n plop"
   }
+  read "pouet" {
+    cmd = "echo -n pouet"
+  }
 }
 
 output "exec" {
