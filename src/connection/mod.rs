@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
 pub mod local;
+pub mod ssh;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExecutionResult {

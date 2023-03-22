@@ -4,7 +4,10 @@ use async_trait::async_trait;
 
 use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
-use crate::{cmd_exec_resource::CmdExecResource, connection::local::ConnectionLocal};
+use crate::{
+    cmd_exec_resource::CmdExecResource,
+    connection::{local::ConnectionLocal, ssh::ConnectionSSH},
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct CmdProvider {}
@@ -48,6 +51,7 @@ impl Provider for CmdProvider {
     {
         Some(map! {
             "local_exec" => CmdExecResource::<ConnectionLocal>::default(),
+            "ssh_exec" => CmdExecResource::<ConnectionSSH>::default(),
         })
     }
 

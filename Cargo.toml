@@ -34,6 +34,8 @@ rmp = "0.8"
 rmp-serde = "1.1"
 rmpv = "1.0"
 rand = "0.7"
+russh = "0.37"
+russh-keys = "0.37"
 
 async-trait = "0.1"
 anyhow = "1"

@@ -90,7 +90,7 @@ where
     T: for<'b> Deserialize<'b>,
 {
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
-        if let Value::Value(connection) = &self.connection {
+        if let Value::Value(connection) = &self.connect {
             _ = connection
                 .validate(diags, attr_path.clone().attribute("connection").index(0))
                 .await;

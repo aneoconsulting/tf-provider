@@ -32,7 +32,7 @@ where
         let state = self.state.as_mut_option()?;
 
         let connection_default = Default::default();
-        let connection = self.connection.as_ref().unwrap_or(&connection_default);
+        let connection = self.connect.as_ref().unwrap_or(&connection_default);
 
         let reads_default = Default::default();
         let reads = self.read.as_ref().unwrap_or(&reads_default);

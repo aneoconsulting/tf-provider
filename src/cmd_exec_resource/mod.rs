@@ -214,7 +214,7 @@ where
 
         let connection_default = Default::default();
         let connection = planned_state
-            .connection
+            .connect
             .as_ref()
             .unwrap_or(&connection_default);
 
@@ -276,7 +276,7 @@ where
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let connection_default = Default::default();
         let connection = planned_state
-            .connection
+            .connect
             .as_ref()
             .unwrap_or(&connection_default);
 
@@ -352,7 +352,7 @@ where
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()> {
         let connection_default = Default::default();
-        let connection = state.connection.as_ref().unwrap_or(&connection_default);
+        let connection = state.connect.as_ref().unwrap_or(&connection_default);
 
         let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
 

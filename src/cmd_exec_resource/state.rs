@@ -30,7 +30,7 @@ where
     pub destroy: Value<StateDestroy<'a>>,
     pub update: ValueList<Value<StateUpdate<'a>>>,
     #[serde(with = "value::serde_as_vec")]
-    pub connection: Value<T>,
+    pub connect: Value<T>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -153,7 +153,7 @@ where
                         ),
                         ..Default::default()
                     }),
-                    "connection" => NestedBlock::Optional(Block {
+                    "connect" => NestedBlock::Optional(Block {
                         attributes: T::schema(),
                         description: Description::plain("Connection information"),
                         ..Default::default()
