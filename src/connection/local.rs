@@ -7,8 +7,11 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Default, Clone)]
+#[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct ConnectionLocal {}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Default, Clone)]
+pub struct ConnectionLocalConfig {}
 
 impl TryFrom<Output> for ExecutionResult {
     type Error = Error;
@@ -24,8 +27,14 @@ impl TryFrom<Output> for ExecutionResult {
 #[async_trait]
 impl Connection for ConnectionLocal {
     const NAME: &'static str = "local";
+    type Config<'a> = ConnectionLocalConfig;
 
-    async fn execute<'a, I, K, V>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
+    async fn execute<'a, I, K, V>(
+        &self,
+        _config: &Self::Config<'a>,
+        cmd: &str,
+        env: I,
+    ) -> Result<ExecutionResult>
     where
         I: IntoIterator<Item = (K, V)> + Send + Sync,
         K: AsRef<str>,
@@ -44,7 +53,12 @@ impl Connection for ConnectionLocal {
     }
 
     /// Validate the state is valid
-    async fn validate(&self, _diags: &mut Diagnostics, _attr_path: AttributePath) -> Option<()> {
+    async fn validate<'a>(
+        &self,
+        _diags: &mut Diagnostics,
+        _attr_path: AttributePath,
+        _config: &Self::Config<'a>,
+    ) -> Option<()> {
         Some(())
     }
 

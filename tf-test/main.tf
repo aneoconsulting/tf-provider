@@ -14,7 +14,12 @@ resource "null_resource" "pouet" {
 
 }
 
-resource "cmd_local_exec" "test" {
+resource "cmd_ssh_exec" "test" {
+  connect {
+    host    = "10.42.0.2"
+    user    = "dummy-user"
+    keyfile = "dummy.ed25519"
+  }
   inputs = {
     a = null_resource.pouet.id
   }
@@ -54,7 +59,7 @@ resource "cmd_local_exec" "test" {
 
 output "exec" {
   value = {
-    inputs  = cmd_local_exec.test.inputs
-    outputs = cmd_local_exec.test.state
+    inputs  = cmd_ssh_exec.test.inputs
+    outputs = cmd_ssh_exec.test.state
   }
 }

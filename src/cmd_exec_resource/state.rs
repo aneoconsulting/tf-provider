@@ -16,8 +16,6 @@ use crate::{
 pub struct State<'a, T>
 where
     T: Connection,
-    T: Serialize,
-    T: for<'b> Deserialize<'b>,
 {
     #[serde(borrow = "'a")]
     pub id: ValueString<'a>,
@@ -30,7 +28,7 @@ where
     pub destroy: Value<StateDestroy<'a>>,
     pub update: ValueList<Value<StateUpdate<'a>>>,
     #[serde(with = "value::serde_as_vec")]
-    pub connect: Value<T>,
+    pub connect: Value<T::Config<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -56,8 +54,6 @@ pub type StateDestroy<'a> = StateCmd<'a>;
 impl<'a, T> WithSchema for State<'a, T>
 where
     T: Connection,
-    T: Serialize,
-    T: for<'b> Deserialize<'b>,
 {
     fn schema() -> Schema {
         let cmd_attribute = Attribute {

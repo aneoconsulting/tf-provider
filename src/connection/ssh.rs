@@ -7,39 +7,53 @@ use russh::client::{Config, Handle, Handler};
 use serde::{Deserialize, Serialize};
 use tf_provider::{
     map, Attribute, AttributeConstraint, AttributePath, AttributeType, Description, Diagnostics,
-    Value,
+    Value, ValueString,
 };
 
+#[derive(Debug, Default, Clone)]
+pub struct ConnectionSsh {}
+
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Hash, Default, Clone)]
-pub struct ConnectionSSH {
-    pub host: Value<String>,
+pub struct ConnectionSshConfig<'a> {
+    pub host: ValueString<'a>,
     pub port: Value<u16>,
-    pub user: Value<String>,
-    pub password: Value<String>,
-    pub key: Value<String>,
-    pub keyfile: Value<String>,
+    pub user: ValueString<'a>,
+    pub password: ValueString<'a>,
+    pub key: ValueString<'a>,
+    pub keyfile: ValueString<'a>,
 }
 
 #[async_trait]
-impl Connection for ConnectionSSH {
+impl Connection for ConnectionSsh {
     const NAME: &'static str = "ssh";
+    type Config<'a> = ConnectionSshConfig<'a>;
 
-    async fn execute<'a, I, K, V>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
+    async fn execute<'a, I, K, V>(
+        &self,
+        config: &Self::Config<'a>,
+        cmd: &str,
+        env: I,
+    ) -> Result<ExecutionResult>
     where
         I: IntoIterator<Item = (K, V)> + Send + Sync,
         K: AsRef<str>,
         V: AsRef<str>,
     {
         _ = env;
-        let client = Client::connect(self).await?;
+        let client = Client::connect(&config).await?;
         let result = client.execute(cmd).await?;
         client.disconnect().await?;
         Ok(result)
     }
 
     /// Validate the state is valid
-    async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) -> Option<()> {
-        match &self.host {
+    async fn validate<'a>(
+        &self,
+        diags: &mut Diagnostics,
+        attr_path: AttributePath,
+        config: &Self::Config<'a>,
+    ) -> Option<()> {
+        match &config.host {
             Value::Value(host) => {
                 if host.is_empty() {
                     diags.error_short(
@@ -108,9 +122,9 @@ struct Client {
 }
 
 impl Client {
-    async fn connect(config: &ConnectionSSH) -> Result<Self> {
+    async fn connect<'a>(config: &ConnectionSshConfig<'a>) -> Result<Self> {
         let russh_config = Arc::new(Config::default());
-        let hostname = config.host.as_ref().map_or("", String::as_str);
+        let hostname = config.host.as_str();
         let port = config.port.unwrap_or_default();
         let port = if port == 0 { 22 } else { port };
         let client_handler = ClientHandler {};
@@ -118,20 +132,25 @@ impl Client {
         let mut handle =
             russh::client::connect(russh_config, (hostname, port), client_handler).await?;
 
-        let password = config.password.as_ref_option().map(String::as_str);
+        let password = config.password.as_str();
+        let password = if password.is_empty() {
+            None
+        } else {
+            Some(password)
+        };
 
         let private_key = match (&config.key, &config.keyfile) {
             (Value::Value(_), Value::Value(_)) => {
                 return Err(anyhow!("Both private key and private key file were given"));
             }
-            (Value::Value(key), _) => Some(russh_keys::decode_secret_key(key.as_str(), password)?),
+            (Value::Value(key), _) => Some(russh_keys::decode_secret_key(key.as_ref(), password)?),
             (_, Value::Value(keyfile)) => {
-                Some(russh_keys::load_secret_key(keyfile.as_str(), password)?)
+                Some(russh_keys::load_secret_key(keyfile.as_ref(), password)?)
             }
             _ => None,
         };
 
-        let username = config.user.as_ref().map_or("", String::as_str);
+        let username = config.user.as_str();
         let username = if username.is_empty() {
             "root"
         } else {

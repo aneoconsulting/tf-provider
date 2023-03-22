@@ -1,17 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-
 use tf_provider::{AttributePath, Diagnostics, Value};
 
 use crate::connection::Connection;
-use crate::utils::{DisplayJoinable, WithValidate};
+use crate::utils::DisplayJoinable;
 
-use super::state::StateUpdate;
+use super::state::{State, StateUpdate};
 
-#[async_trait]
-impl WithValidate for super::state::StateCmd<'_> {
+impl super::state::StateCmd<'_> {
     async fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) {
         attr_path.add_attribute("cmd");
         match self.cmd.as_ref() {
@@ -30,8 +26,7 @@ impl WithValidate for super::state::StateCmd<'_> {
     }
 }
 
-#[async_trait]
-impl WithValidate for super::state::StateUpdate<'_> {
+impl super::state::StateUpdate<'_> {
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
         _ = self.cmd.validate(diags, attr_path.clone());
         for (name, set) in [("triggers", &self.triggers), ("reloads", &self.reloads)] {
@@ -82,26 +77,33 @@ impl WithValidate for super::state::StateUpdate<'_> {
     }
 }
 
-#[async_trait]
-impl<'a, T> WithValidate for super::state::State<'a, T>
+impl<T> super::CmdExecResource<T>
 where
     T: Connection,
-    T: Serialize,
-    T: for<'b> Deserialize<'b>,
 {
-    async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
-        if let Value::Value(connection) = &self.connect {
-            _ = connection
-                .validate(diags, attr_path.clone().attribute("connection").index(0))
+    pub(super) async fn validate<'a>(
+        &self,
+        diags: &mut Diagnostics,
+        config: &State<'a, T>,
+        attr_path: AttributePath,
+    ) {
+        if let Value::Value(connection) = &config.connect {
+            _ = self
+                .connect
+                .validate(
+                    diags,
+                    attr_path.clone().attribute("connection").index(0),
+                    connection,
+                )
                 .await;
         }
-        if let Value::Value(create) = &self.create {
+        if let Value::Value(create) = &config.create {
             _ = create.validate(diags, attr_path.clone().attribute("create").index(0))
         }
-        if let Value::Value(destroy) = &self.destroy {
+        if let Value::Value(destroy) = &config.destroy {
             _ = destroy.validate(diags, attr_path.clone().attribute("destroy").index(0))
         }
-        match &self.read {
+        match &config.read {
             Value::Value(read) => {
                 let attr_path = attr_path.clone().attribute("read");
                 for (name, read) in read {
@@ -121,8 +123,8 @@ where
         }
 
         let reads_default = Default::default();
-        let reads = self.read.as_ref().unwrap_or(&reads_default);
-        match &self.update {
+        let reads = config.read.as_ref().unwrap_or(&reads_default);
+        match &config.update {
             Value::Value(updates) => {
                 ensure_unambiguous_updates(diags, updates.as_slice());
                 for (i, update) in updates.into_iter().enumerate() {

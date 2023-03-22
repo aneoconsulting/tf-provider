@@ -1,14 +1,10 @@
-use serde::{Deserialize, Serialize};
 use tf_provider::{Diagnostics, Value};
 
 use crate::{connection::Connection, utils::WithNormalize};
 
 use super::state::State;
 
-impl<'a, T> WithNormalize for State<'a, T>
-where
-    T: Connection + Serialize + for<'b> Deserialize<'b>,
-{
+impl<'a, T: Connection> WithNormalize for State<'a, T> {
     fn normalize(&mut self, _diags: &mut Diagnostics) {
         if self.id.is_null() {
             self.id = Value::Unknown;

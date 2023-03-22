@@ -1,11 +1,10 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
-use std::{fmt::Debug, marker::PhantomData};
+use std::fmt::Debug;
 
 use async_trait::async_trait;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use serde::{Deserialize, Serialize};
 
 use tf_provider::{
     AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty, ValueList, ValueMap,
@@ -13,7 +12,7 @@ use tf_provider::{
 };
 
 use crate::connection::Connection;
-use crate::utils::{WithCmd, WithNormalize, WithValidate};
+use crate::utils::{WithCmd, WithNormalize};
 use crate::utils::{WithEnv, WithSchema};
 
 mod normalize;
@@ -21,22 +20,26 @@ mod read;
 mod state;
 mod validate;
 
+use read::WithRead;
 use state::State;
 
-use self::read::WithRead;
-use self::state::StateUpdate;
+use state::StateUpdate;
 
 #[derive(Debug, Default)]
 pub struct CmdExecResource<T: Connection> {
-    ph: PhantomData<T>,
+    connect: T,
+}
+
+impl<T: Connection> CmdExecResource<T> {
+    pub fn new(connect: T) -> Self {
+        Self { connect }
+    }
 }
 
 #[async_trait]
 impl<T> Resource for CmdExecResource<T>
 where
     T: Connection,
-    T: for<'e> Deserialize<'e>,
-    T: Serialize,
     T: Debug,
     T: Clone,
 {
@@ -49,7 +52,7 @@ where
     }
 
     async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()> {
-        config.validate(diags, Default::default()).await;
+        self.validate(diags, &config, Default::default()).await;
 
         if diags.errors.len() == 0 {
             Some(())
@@ -80,7 +83,7 @@ where
                 .collect(),
         );
 
-        state.read_all(diags, &state_env).await;
+        state.read(diags, &self.connect, &state_env).await;
 
         Some((state, private_state))
     }
@@ -223,8 +226,13 @@ where
         let create_cmd = state.create.cmd();
         if create_cmd != "" {
             let attr_path = AttributePath::new("create").index(0).attribute("cmd");
-            match connection
-                .execute(create_cmd, with_env(&state_env, state.create.env()))
+            match self
+                .connect
+                .execute(
+                    connection,
+                    create_cmd,
+                    with_env(&state_env, state.create.env()),
+                )
                 .await
             {
                 Ok(res) => {
@@ -261,7 +269,7 @@ where
             return None;
         }
 
-        state.read_all(diags, &state_env).await;
+        state.read(diags, &self.connect, &state_env).await;
 
         Some((state, planned_private_state))
     }
@@ -303,8 +311,9 @@ where
             let attr_path = attr_path.attribute("cmd");
             let update_cmd = update.cmd();
             if update_cmd != "" {
-                match connection
-                    .execute(update_cmd, with_env(&state_env, update.env()))
+                match self
+                    .connect
+                    .execute(connection, update_cmd, with_env(&state_env, update.env()))
                     .await
                 {
                     Ok(res) => {
@@ -341,7 +350,7 @@ where
             }
         }
 
-        state.read_all(diags, &state_env).await;
+        state.read(diags, &self.connect, &state_env).await;
 
         Some((state, planned_private_state))
     }
@@ -359,8 +368,13 @@ where
         let destroy_cmd = state.destroy.cmd();
         if destroy_cmd != "" {
             let attr_path = AttributePath::new("destroy").index(0).attribute("cmd");
-            match connection
-                .execute(destroy_cmd, with_env(&state_env, state.destroy.env()))
+            match self
+                .connect
+                .execute(
+                    connection,
+                    destroy_cmd,
+                    with_env(&state_env, state.destroy.env()),
+                )
                 .await
             {
                 Ok(res) => {

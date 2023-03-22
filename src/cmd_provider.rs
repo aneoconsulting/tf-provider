@@ -6,7 +6,7 @@ use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
 use crate::{
     cmd_exec_resource::CmdExecResource,
-    connection::{local::ConnectionLocal, ssh::ConnectionSSH},
+    connection::{local::ConnectionLocal, ssh::ConnectionSsh},
 };
 
 #[derive(Debug, Default, Clone)]
@@ -50,8 +50,8 @@ impl Provider for CmdProvider {
     ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::resource::DynamicResource>>>
     {
         Some(map! {
-            "local_exec" => CmdExecResource::<ConnectionLocal>::default(),
-            "ssh_exec" => CmdExecResource::<ConnectionSSH>::default(),
+            "local_exec" => CmdExecResource::new(ConnectionLocal::default()),
+            "ssh_exec" => CmdExecResource::new(ConnectionSsh::default()),
         })
     }
 

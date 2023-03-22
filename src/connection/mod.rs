@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
 
 pub mod local;
@@ -17,16 +18,27 @@ pub struct ExecutionResult {
 #[async_trait]
 pub trait Connection: Send + Sync + 'static + Default {
     const NAME: &'static str;
+    type Config<'a>: Send + Sync + Clone + Default + Serialize + for<'de> Deserialize<'de>;
 
     /// execute a command over the connection
-    async fn execute<'a, I, K, V>(&'a self, cmd: &'a str, env: I) -> Result<ExecutionResult>
+    async fn execute<'a, I, K, V>(
+        &self,
+        config: &Self::Config<'a>,
+        cmd: &str,
+        env: I,
+    ) -> Result<ExecutionResult>
     where
         I: IntoIterator<Item = (K, V)> + Send + Sync,
         K: AsRef<str>,
         V: AsRef<str>;
 
     /// Validate the state is valid
-    async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) -> Option<()>;
+    async fn validate<'a>(
+        &self,
+        diags: &mut Diagnostics,
+        attr_path: AttributePath,
+        config: &Self::Config<'a>,
+    ) -> Option<()>;
 
     /// Get the schema for the connection block
     fn schema() -> HashMap<String, Attribute>;

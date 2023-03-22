@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+
 use tf_provider::{AttributePath, Diagnostics, Value};
 
 use crate::connection::Connection;
@@ -10,9 +10,11 @@ use super::{state::State, with_env};
 
 #[async_trait]
 pub(super) trait WithRead {
-    async fn read_all(
+    type Connect: Connection;
+    async fn read(
         &mut self,
         diags: &mut Diagnostics,
+        connect: &Self::Connect,
         env: &Vec<(Cow<str>, Cow<str>)>,
     ) -> Option<()>;
 }
@@ -21,12 +23,12 @@ pub(super) trait WithRead {
 impl<'a, T> WithRead for State<'a, T>
 where
     T: Connection,
-    T: Serialize,
-    T: for<'b> Deserialize<'b>,
 {
-    async fn read_all(
+    type Connect = T;
+    async fn read(
         &mut self,
         diags: &mut Diagnostics,
+        connect: &Self::Connect,
         env: &Vec<(Cow<str>, Cow<str>)>,
     ) -> Option<()> {
         let state = self.state.as_mut_option()?;
@@ -47,7 +49,10 @@ where
                     .attribute("cmd");
                 let cmd = read.cmd.as_str();
 
-                match connection.execute(cmd, with_env(&env, &read.env)).await {
+                match connect
+                    .execute(connection, cmd, with_env(&env, &read.env))
+                    .await
+                {
                     Ok(res) => {
                         if res.status == 0 {
                             if res.stderr.len() > 0 {
