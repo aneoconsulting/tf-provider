@@ -263,7 +263,6 @@ impl Client {
         loop {
             tokio::select! {
                 Some(data) = rx.recv() => {
-                    eprintln!("{}", data);
                     if data.is_empty() {
                         channel.eof().await?;
                     } else {
@@ -279,6 +278,7 @@ impl Client {
                         }
                         russh::ChannelMsg::ExitStatus { exit_status } => {
                             send.await??;
+                            channel.close().await?;
                             return Ok(ExecutionResult {
                                 status: exit_status as i32,
                                 stdout: String::from_utf8(stdout)?,
@@ -293,6 +293,7 @@ impl Client {
                         } => {
                             _ = core_dumped;
                             _ = lang_tag;
+                            channel.close().await?;
                             return Err(anyhow!(
                                 "Exit signal received {signal_name:?}: {error_message}"
                             ));
