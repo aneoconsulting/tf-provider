@@ -87,6 +87,15 @@ where
         config: &State<'a, T>,
         attr_path: AttributePath,
     ) {
+        if let Value::Value(concurrency) = config.command_concurrency {
+            if concurrency <= 0 {
+                diags.error(
+                    "Invalid `command_concurrency`",
+                    format!("Command concurrency must be positive, but was {concurrency}."),
+                    AttributePath::new("command_concurrency"),
+                );
+            }
+        }
         if let Value::Value(connection) = &config.connect {
             _ = self
                 .connect

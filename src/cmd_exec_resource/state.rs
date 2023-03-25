@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use tf_provider::{
     map, value, Attribute, AttributeConstraint, AttributeType, Block, Description, NestedBlock,
-    Schema, Value, ValueList, ValueMap, ValueSet, ValueString,
+    Schema, Value, ValueList, ValueMap, ValueNumber, ValueSet, ValueString,
 };
 
 use crate::{
@@ -29,6 +29,7 @@ where
     pub update: ValueList<Value<StateUpdate<'a>>>,
     #[serde(with = "value::serde_as_vec")]
     pub connect: Value<T::Config<'a>>,
+    pub command_concurrency: ValueNumber,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -89,6 +90,12 @@ where
                         attr_type: AttributeType::Map(AttributeType::String.into()),
                         description: Description::plain("State of the resource"),
                         constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "command_concurrency" => Attribute {
+                        attr_type: AttributeType::Number,
+                        description: Description::plain("Number of conccurent commands spawned in parallel"),
+                        constraint: AttributeConstraint::Optional,
                         ..Default::default()
                     },
                 },

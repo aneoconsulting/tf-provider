@@ -64,8 +64,10 @@ where
             }
         }
 
+        let concurrency = self.command_concurrency.clone().unwrap_or(4) as usize;
+
         for (name, value, result) in stream::iter(read_tasks.into_iter())
-            .buffer_unordered(6)
+            .buffer_unordered(concurrency)
             .collect::<Vec<_>>()
             .await
         {
