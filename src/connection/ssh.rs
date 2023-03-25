@@ -237,7 +237,8 @@ impl Client {
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
         let mut channel = self.handle.channel_open_session().await?;
-        channel.exec(true, "bash -").await?;
+
+        channel.exec(false, "/bin/sh").await?;
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(10);
 
@@ -248,7 +249,7 @@ impl Client {
             ) -> Result<(), SendError<&'a str>> {
                 tx.send(msg).await
             }
-            send(&tx, "set -ex\nnewline='\n'\nread_stdin() {\nvalue=\nwhile IFS= read -r line; do\nvalue=\"$value$line$newline\"\ndone < /dev/stdin\nvalue=\"$value$line\"\n}\n").await?;
+            send(&tx, "newline='\n'\nread_stdin() {\nvalue=\nwhile IFS= read -r line; do\nvalue=\"$value$line$newline\"\ndone\nvalue=\"$value$line\"\n}\n").await?;
             for (name, value) in env {
                 let value = value.as_ref();
                 send(&tx, "read_stdin << '__!@#$END_OF_VARIABLE$#@!__'\n").await?;
@@ -259,12 +260,21 @@ impl Client {
                 send(&tx, name.as_ref()).await?;
                 send(&tx, "=\"${value%%?}\"\n").await?;
             }
-            send(&tx, command).await?;
-            send(&tx, "").await?;
+            send(
+                &tx,
+                "exec /usr/bin/env bash << '__!@#$END_OF_SCRIPT$#@!__'\n",
+            )
+            .await?;
+            if !command.is_empty() {
+                send(&tx, command).await?;
+            }
+            send(&tx, "\n__!@#$END_OF_SCRIPT$#@!__\n").await?;
+            send(&tx, "").await?; // EOF
             Result::<(), SendError<&'a str>>::Ok(())
         };
 
         let receive = async {
+            let mut status = None;
             loop {
                 tokio::select! {
                     Some(data) = rx.recv() => {
@@ -274,7 +284,18 @@ impl Client {
                             channel.data(data.as_bytes()).await?;
                         }
                     },
-                    Some(msg) = channel.wait() => {
+                    msg = channel.wait() => {
+                        let Some(msg) = msg else {
+                            if let Some(status) = status {
+                                return Ok(ExecutionResult {
+                                    status: status as i32,
+                                    stdout: String::from_utf8(stdout)?,
+                                    stderr: String::from_utf8(stderr)?,
+                                })
+                            } else {
+                                return Err(anyhow!("channel closed without exit code"));
+                            }
+                        };
                         match msg {
                             russh::ChannelMsg::Data { ref data } => stdout.write_all(data)?,
                             russh::ChannelMsg::ExtendedData { ref data, ext } => {
@@ -282,11 +303,7 @@ impl Client {
                                 stderr.write_all(data)?;
                             }
                             russh::ChannelMsg::ExitStatus { exit_status } => {
-                                return Ok(ExecutionResult {
-                                    status: exit_status as i32,
-                                    stdout: String::from_utf8(stdout)?,
-                                    stderr: String::from_utf8(stderr)?,
-                                });
+                                status = Some(exit_status as i32);
                             }
                             russh::ChannelMsg::ExitSignal {
                                 signal_name,
