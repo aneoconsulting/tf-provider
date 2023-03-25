@@ -21,16 +21,18 @@ pub trait Connection: Send + Sync + 'static + Default {
     type Config<'a>: Send + Sync + Clone + Default + Serialize + for<'de> Deserialize<'de>;
 
     /// execute a command over the connection
-    async fn execute<'a, I, K, V>(
+    async fn execute<'a, 'b, I, K, V>(
         &self,
         config: &Self::Config<'a>,
         cmd: &str,
         env: I,
     ) -> Result<ExecutionResult>
     where
-        I: IntoIterator<Item = (K, V)> + Send + Sync,
-        K: AsRef<str>,
-        V: AsRef<str>;
+        'a: 'b,
+        I: IntoIterator<Item = (&'b K, &'b V)> + Send + Sync + 'b,
+        I::IntoIter: Send + Sync + 'b,
+        K: AsRef<str> + Send + Sync + 'b,
+        V: AsRef<str> + Send + Sync + 'b;
 
     /// Validate the state is valid
     async fn validate<'a>(

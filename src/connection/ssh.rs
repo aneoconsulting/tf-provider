@@ -9,7 +9,10 @@ use tf_provider::{
     map, Attribute, AttributeConstraint, AttributePath, AttributeType, Description, Diagnostics,
     Value, ValueString,
 };
-use tokio::sync::{mpsc::error::SendError, Mutex};
+use tokio::sync::{
+    mpsc::{error::SendError, Sender},
+    Mutex,
+};
 
 #[derive(Default, Clone)]
 pub struct ConnectionSsh {
@@ -69,16 +72,18 @@ impl Connection for ConnectionSsh {
     const NAME: &'static str = "ssh";
     type Config<'a> = ConnectionSshConfig<'a>;
 
-    async fn execute<'a, I, K, V>(
+    async fn execute<'a, 'b, I, K, V>(
         &self,
         config: &Self::Config<'a>,
         cmd: &str,
         env: I,
     ) -> Result<ExecutionResult>
     where
-        I: IntoIterator<Item = (K, V)> + Send + Sync,
-        K: AsRef<str>,
-        V: AsRef<str>,
+        'a: 'b,
+        I: IntoIterator<Item = (&'b K, &'b V)> + Send + Sync + 'b,
+        I::IntoIter: Send + Sync + 'b,
+        K: AsRef<str> + Send + Sync + 'b,
+        V: AsRef<str> + Send + Sync + 'b,
     {
         _ = env;
 
@@ -222,11 +227,12 @@ impl Client {
         Ok(Client { handle })
     }
 
-    async fn execute<I, K, V>(&self, command: &str, env: I) -> Result<ExecutionResult>
+    async fn execute<'a, I, K, V>(&self, command: &str, env: I) -> Result<ExecutionResult>
     where
-        I: IntoIterator<Item = (K, V)> + Send + Sync,
-        K: AsRef<str>,
-        V: AsRef<str>,
+        I: IntoIterator<Item = (&'a K, &'a V)> + Send + Sync + 'a,
+        I::IntoIter: Send + Sync + 'a,
+        K: AsRef<str> + Send + Sync + 'a,
+        V: AsRef<str> + Send + Sync + 'a,
     {
         let mut stdout = Vec::new();
         let mut stderr = Vec::new();
@@ -234,75 +240,77 @@ impl Client {
         channel.exec(true, "bash -").await?;
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(10);
-        let command = command.to_string();
 
-        let env: Vec<(_, _)> = env
-            .into_iter()
-            .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
-            .collect();
-
-        let send = tokio::spawn(async move {
-            tx.send("set -ex\nnewline='\n'\nread_stdin() {\nvalue=\nwhile IFS= read -r line; do\nvalue=\"$value$line$newline\"\ndone < /dev/stdin\nvalue=\"$value$line\"\n}\n".to_string()).await?;
+        let send = async {
+            async fn send<'a>(
+                tx: &Sender<&'a str>,
+                msg: &'a str,
+            ) -> Result<(), SendError<&'a str>> {
+                tx.send(msg).await
+            }
+            send(&tx, "set -ex\nnewline='\n'\nread_stdin() {\nvalue=\nwhile IFS= read -r line; do\nvalue=\"$value$line$newline\"\ndone < /dev/stdin\nvalue=\"$value$line\"\n}\n").await?;
             for (name, value) in env {
-                tx.send("read_stdin << '__!@#$END_OF_VARIABLE$#@!__'\n".to_string())
-                    .await?;
+                let value = value.as_ref();
+                send(&tx, "read_stdin << '__!@#$END_OF_VARIABLE$#@!__'\n").await?;
                 if !value.is_empty() {
-                    tx.send(value).await?;
+                    send(&tx, value).await?;
                 }
-                //tx.send(String::default()).await?;
-                tx.send(format!(
-                    "\n__!@#$END_OF_VARIABLE$#@!__\nexport {name}=\"${{value%%?}}\"\n"
-                ))
-                .await?;
+                send(&tx, "\n__!@#$END_OF_VARIABLE$#@!__\nexport ").await?;
+                send(&tx, name.as_ref()).await?;
+                send(&tx, "=\"${value%%?}\"\n").await?;
             }
-            tx.send(command).await?;
-            tx.send(String::default()).await?;
-            Result::<(), SendError<String>>::Ok(())
-        });
+            send(&tx, command).await?;
+            send(&tx, "").await?;
+            Result::<(), SendError<&'a str>>::Ok(())
+        };
 
-        loop {
-            tokio::select! {
-                Some(data) = rx.recv() => {
-                    if data.is_empty() {
-                        channel.eof().await?;
-                    } else {
-                        channel.data(data.as_bytes()).await?;
-                    }
-                },
-                Some(msg) = channel.wait() => {
-                    match msg {
-                        russh::ChannelMsg::Data { ref data } => stdout.write_all(data)?,
-                        russh::ChannelMsg::ExtendedData { ref data, ext } => {
-                            _ = ext;
-                            stderr.write_all(data)?;
+        let receive = async {
+            loop {
+                tokio::select! {
+                    Some(data) = rx.recv() => {
+                        if data.is_empty() {
+                            channel.eof().await?;
+                        } else {
+                            channel.data(data.as_bytes()).await?;
                         }
-                        russh::ChannelMsg::ExitStatus { exit_status } => {
-                            send.await??;
-                            channel.close().await?;
-                            return Ok(ExecutionResult {
-                                status: exit_status as i32,
-                                stdout: String::from_utf8(stdout)?,
-                                stderr: String::from_utf8(stderr)?,
-                            });
+                    },
+                    Some(msg) = channel.wait() => {
+                        match msg {
+                            russh::ChannelMsg::Data { ref data } => stdout.write_all(data)?,
+                            russh::ChannelMsg::ExtendedData { ref data, ext } => {
+                                _ = ext;
+                                stderr.write_all(data)?;
+                            }
+                            russh::ChannelMsg::ExitStatus { exit_status } => {
+                                return Ok(ExecutionResult {
+                                    status: exit_status as i32,
+                                    stdout: String::from_utf8(stdout)?,
+                                    stderr: String::from_utf8(stderr)?,
+                                });
+                            }
+                            russh::ChannelMsg::ExitSignal {
+                                signal_name,
+                                core_dumped,
+                                error_message,
+                                lang_tag,
+                            } => {
+                                _ = core_dumped;
+                                _ = lang_tag;
+                                return Err(anyhow!(
+                                    "Exit signal received {signal_name:?}: {error_message}"
+                                ));
+                            }
+                            _ => (),
                         }
-                        russh::ChannelMsg::ExitSignal {
-                            signal_name,
-                            core_dumped,
-                            error_message,
-                            lang_tag,
-                        } => {
-                            _ = core_dumped;
-                            _ = lang_tag;
-                            channel.close().await?;
-                            return Err(anyhow!(
-                                "Exit signal received {signal_name:?}: {error_message}"
-                            ));
-                        }
-                        _ => (),
                     }
                 }
             }
-        }
+        };
+
+        let (send_result, receive_result) = tokio::join!(send, receive);
+        channel.close().await?;
+        send_result.map_err(|err| anyhow!("{err}"))?;
+        receive_result
     }
 
     async fn disconnect(&self) -> Result<()> {

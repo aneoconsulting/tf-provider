@@ -29,21 +29,23 @@ impl Connection for ConnectionLocal {
     const NAME: &'static str = "local";
     type Config<'a> = ConnectionLocalConfig;
 
-    async fn execute<'a, I, K, V>(
+    async fn execute<'a, 'b, I, K, V>(
         &self,
         _config: &Self::Config<'a>,
         cmd: &str,
         env: I,
     ) -> Result<ExecutionResult>
     where
-        I: IntoIterator<Item = (K, V)> + Send + Sync,
-        K: AsRef<str>,
-        V: AsRef<str>,
+        'a: 'b,
+        I: IntoIterator<Item = (&'b K, &'b V)> + Send + Sync + 'b,
+        I::IntoIter: Send + Sync + 'b,
+        K: AsRef<str> + Send + Sync + 'b,
+        V: AsRef<str> + Send + Sync + 'b,
     {
         if cmd.len() > 0 {
             let mut command = Command::new("sh");
             command.arg("-c").arg(cmd);
-            for (k, v) in env.into_iter() {
+            for (k, v) in env {
                 command.env(k.as_ref(), v.as_ref());
             }
             Ok(command.output().await?.try_into()?)
