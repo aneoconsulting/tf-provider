@@ -20,8 +20,8 @@ pub struct ExecutionResult {
 pub trait Connection: Send + Sync + 'static + Default {
     const NAME: &'static str;
     type Config<'a>: Send + Sync + Clone + Default + Serialize + for<'de> Deserialize<'de>;
-    type Reader: AsyncRead;
-    type Writer: AsyncWrite;
+    type Reader: AsyncRead + Send;
+    type Writer: AsyncWrite + Send;
 
     /// execute a command over the connection
     async fn execute<'a, 'b, I, K, V>(

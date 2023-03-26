@@ -6,6 +6,7 @@ use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
 use crate::{
     cmd_exec::{CmdExecDataSource, CmdExecResource},
+    cmd_file::CmdFileDataSource,
     connection::{local::ConnectionLocal, ssh::ConnectionSsh},
 };
 
@@ -64,6 +65,8 @@ impl Provider for CmdProvider {
         Some(map! {
             "local_exec" => CmdExecDataSource::new(ConnectionLocal::default()),
             "ssh_exec" => CmdExecDataSource::new(ConnectionSsh::default()),
+            "local_file" => CmdFileDataSource::new(ConnectionLocal::default()),
+            "ssh_file" => CmdFileDataSource::new(ConnectionSsh::default()),
         })
     }
 }

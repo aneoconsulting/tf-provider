@@ -70,6 +70,10 @@ data "cmd_local_exec" "pouet" {
   }
 }
 
+data "cmd_local_file" "pouet" {
+  path = "a"
+}
+
 output "exec" {
   value = {
     inputs  = cmd_ssh_exec.test.inputs
@@ -81,4 +85,8 @@ output "data_exec" {
     inputs  = data.cmd_local_exec.pouet.inputs
     outputs = data.cmd_local_exec.pouet.outputs
   }
+}
+
+output "file" {
+  value = data.cmd_local_file.pouet
 }
