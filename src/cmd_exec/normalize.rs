@@ -2,9 +2,9 @@ use tf_provider::{Diagnostics, Value};
 
 use crate::{connection::Connection, utils::WithNormalize};
 
-use super::state::State;
+use super::state::ResourceState;
 
-impl<'a, T: Connection> WithNormalize for State<'a, T> {
+impl<'a, T: Connection> WithNormalize for ResourceState<'a, T> {
     fn normalize(&mut self, _diags: &mut Diagnostics) {
         if self.id.is_null() {
             self.id = Value::Unknown;

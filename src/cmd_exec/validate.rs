@@ -5,7 +5,10 @@ use tf_provider::{AttributePath, Diagnostics, Value};
 use crate::connection::Connection;
 use crate::utils::DisplayJoinable;
 
-use super::state::{State, StateUpdate};
+use super::{
+    state::{DataSourceState, ResourceState, StateUpdate},
+    CmdExecDataSource,
+};
 
 impl super::state::StateCmd<'_> {
     async fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) {
@@ -77,14 +80,11 @@ impl super::state::StateUpdate<'_> {
     }
 }
 
-impl<T> super::resource::CmdExecResource<T>
-where
-    T: Connection,
-{
+impl<T: Connection> super::resource::CmdExecResource<T> {
     pub(super) async fn validate<'a>(
         &self,
         diags: &mut Diagnostics,
-        config: &State<'a, T>,
+        config: &ResourceState<'a, T>,
         attr_path: AttributePath,
     ) {
         if let Value::Value(concurrency) = config.command_concurrency {
@@ -92,7 +92,7 @@ where
                 diags.error(
                     "Invalid `command_concurrency`",
                     format!("Command concurrency must be positive, but was {concurrency}."),
-                    AttributePath::new("command_concurrency"),
+                    attr_path.clone().attribute("command_concurrency"),
                 );
             }
         }
@@ -161,6 +161,54 @@ where
                     "`update` blocks are unknown during plan.",
                     "All `update` blocks must be known during plan.",
                     attr_path.clone().attribute("update"),
+                );
+            }
+        }
+    }
+}
+
+impl<T: Connection> CmdExecDataSource<T> {
+    pub(super) async fn validate<'a>(
+        &self,
+        diags: &mut Diagnostics,
+        config: &DataSourceState<'a, T>,
+        attr_path: AttributePath,
+    ) {
+        if let Value::Value(concurrency) = config.command_concurrency {
+            if concurrency <= 0 {
+                diags.error(
+                    "Invalid `command_concurrency`",
+                    format!("Command concurrency must be positive, but was {concurrency}."),
+                    attr_path.clone().attribute("command_concurrency"),
+                );
+            }
+        }
+        if let Value::Value(connection) = &config.connect {
+            _ = self
+                .connect
+                .validate(
+                    diags,
+                    attr_path.clone().attribute("connection").index(0),
+                    connection,
+                )
+                .await;
+        }
+
+        match &config.read {
+            Value::Value(read) => {
+                let attr_path = AttributePath::new("read");
+                for (name, read) in read {
+                    if let Value::Value(read) = read {
+                        _ = read.validate(diags, attr_path.clone().key(name.to_string()));
+                    }
+                }
+            }
+            Value::Null => (),
+            Value::Unknown => {
+                diags.error(
+                    "`read` blocks are unknown during plan.",
+                    "All `read` blocks must be known during plan.",
+                    AttributePath::new("read"),
                 );
             }
         }

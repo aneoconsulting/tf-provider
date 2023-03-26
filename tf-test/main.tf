@@ -138,9 +138,25 @@ resource "cmd_ssh_exec" "test" {
   }
 }
 
+data "cmd_local_exec" "pouet" {
+  inputs = {
+    a = cmd_ssh_exec.test.state.a
+  }
+
+  read "a" {
+    cmd = "echo -n a"
+  }
+}
+
 output "exec" {
   value = {
     inputs  = cmd_ssh_exec.test.inputs
     outputs = cmd_ssh_exec.test.state
+  }
+}
+output "data_exec" {
+  value = {
+    inputs  = data.cmd_local_exec.pouet.inputs
+    outputs = data.cmd_local_exec.pouet.outputs
   }
 }

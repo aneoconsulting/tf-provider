@@ -2,12 +2,14 @@ use std::borrow::Cow;
 
 use tf_provider::{ValueMap, ValueString};
 
+mod data_source;
 mod normalize;
 mod read;
 mod resource;
 mod state;
 mod validate;
 
+pub use data_source::CmdExecDataSource;
 pub use resource::CmdExecResource;
 
 fn prepare_envs<'a>(

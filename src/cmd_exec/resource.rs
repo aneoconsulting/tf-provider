@@ -14,7 +14,7 @@ use tf_provider::{
 use crate::connection::Connection;
 use crate::utils::{WithCmd, WithEnv, WithNormalize, WithSchema};
 
-use super::state::{State, StateUpdate};
+use super::state::{ResourceState, StateUpdate};
 use super::{prepare_envs, with_env};
 
 #[derive(Debug, Default)]
@@ -35,12 +35,12 @@ where
     T: Debug,
     T: Clone,
 {
-    type State<'a> = State<'a, T>;
+    type State<'a> = ResourceState<'a, T>;
     type PrivateState<'a> = ValueEmpty;
     type ProviderMetaState<'a> = ValueEmpty;
 
     fn schema(&self, _diags: &mut Diagnostics) -> Option<Schema> {
-        Some(State::<T>::schema())
+        Some(ResourceState::<T>::schema())
     }
 
     async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()> {
