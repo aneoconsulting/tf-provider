@@ -77,7 +77,7 @@ impl super::state::StateUpdate<'_> {
     }
 }
 
-impl<T> super::CmdExecResource<T>
+impl<T> super::resource::CmdExecResource<T>
 where
     T: Connection,
 {
