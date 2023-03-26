@@ -97,7 +97,7 @@ where
             Value::Unknown => (),
         }
 
-        if diags.errors.len() == 0 {
+        if diags.errors.is_empty() {
             Some(())
         } else {
             None

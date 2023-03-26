@@ -31,7 +31,7 @@ impl super::state::StateCmd<'_> {
 
 impl super::state::StateUpdate<'_> {
     async fn validate(&self, diags: &mut Diagnostics, attr_path: AttributePath) {
-        _ = self.cmd.validate(diags, attr_path.clone());
+        self.cmd.validate(diags, attr_path.clone()).await;
         for (name, set) in [("triggers", &self.triggers), ("reloads", &self.reloads)] {
             let attr_path = attr_path.clone().attribute(name);
             match set {
@@ -107,17 +107,22 @@ impl<T: Connection> super::resource::CmdExecResource<T> {
                 .await;
         }
         if let Value::Value(create) = &config.create {
-            _ = create.validate(diags, attr_path.clone().attribute("create").index(0))
+            create
+                .validate(diags, attr_path.clone().attribute("create").index(0))
+                .await;
         }
         if let Value::Value(destroy) = &config.destroy {
-            _ = destroy.validate(diags, attr_path.clone().attribute("destroy").index(0))
+            destroy
+                .validate(diags, attr_path.clone().attribute("destroy").index(0))
+                .await;
         }
         match &config.read {
             Value::Value(read) => {
                 let attr_path = attr_path.clone().attribute("read");
                 for (name, read) in read {
                     if let Value::Value(read) = read {
-                        _ = read.validate(diags, attr_path.clone().key(name.to_string()));
+                        read.validate(diags, attr_path.clone().key(name.to_string()))
+                            .await;
                     }
                 }
             }
@@ -136,10 +141,10 @@ impl<T: Connection> super::resource::CmdExecResource<T> {
         match &config.update {
             Value::Value(updates) => {
                 ensure_unambiguous_updates(diags, updates.as_slice());
-                for (i, update) in updates.into_iter().enumerate() {
+                for (i, update) in updates.iter().enumerate() {
                     if let Value::Value(update) = update {
                         let attr_path = attr_path.clone().attribute("update").index(i as i64);
-                        _ = update.validate(diags, attr_path.clone());
+                        update.validate(diags, attr_path.clone()).await;
 
                         if let Value::Value(reloads) = &update.reloads {
                             for name in reloads {
@@ -199,7 +204,8 @@ impl<T: Connection> CmdExecDataSource<T> {
                 let attr_path = AttributePath::new("read");
                 for (name, read) in read {
                     if let Value::Value(read) = read {
-                        _ = read.validate(diags, attr_path.clone().key(name.to_string()));
+                        read.validate(diags, attr_path.clone().key(name.to_string()))
+                            .await;
                     }
                 }
             }

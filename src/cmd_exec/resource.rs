@@ -46,7 +46,7 @@ where
     async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()> {
         self.validate(diags, &config, Default::default()).await;
 
-        if diags.errors.len() == 0 {
+        if diags.errors.is_empty() {
             Some(())
         } else {
             None
@@ -216,7 +216,7 @@ where
         let state_env = prepare_envs(&[(&planned_state.inputs, "INPUT_")]);
 
         let create_cmd = state.create.cmd();
-        if create_cmd != "" {
+        if !create_cmd.is_empty() {
             let attr_path = AttributePath::new("create").index(0).attribute("cmd");
             match self
                 .connect
@@ -228,7 +228,7 @@ where
                 .await
             {
                 Ok(res) => {
-                    if res.stdout.len() > 0 {
+                    if !res.stdout.is_empty() {
                         diags.warning(
                             "`create` stdout was not empty",
                             res.stdout,
@@ -236,7 +236,7 @@ where
                         );
                     }
                     if res.status == 0 {
-                        if res.stderr.len() > 0 {
+                        if !res.stderr.is_empty() {
                             diags.warning(
                                 "`create` succeeded but stderr was not empty",
                                 res.stderr,
@@ -257,7 +257,7 @@ where
             }
         }
 
-        if diags.errors.len() > 0 {
+        if !diags.errors.is_empty() {
             return None;
         }
 
@@ -302,14 +302,14 @@ where
         if let Some((update, attr_path)) = find_update(&planned_state.update, &modified) {
             let attr_path = attr_path.attribute("cmd");
             let update_cmd = update.cmd();
-            if update_cmd != "" {
+            if !update_cmd.is_empty() {
                 match self
                     .connect
                     .execute(connection, update_cmd, with_env(&state_env, update.env()))
                     .await
                 {
                     Ok(res) => {
-                        if res.stdout.len() > 0 {
+                        if !res.stdout.is_empty() {
                             diags.warning(
                                 "`update` stdout was not empty",
                                 res.stdout,
@@ -317,7 +317,7 @@ where
                             );
                         }
                         if res.status == 0 {
-                            if res.stderr.len() > 0 {
+                            if !res.stderr.is_empty() {
                                 diags.warning(
                                     "`update` succeeded but stderr was not empty",
                                     res.stderr,
@@ -358,7 +358,7 @@ where
         let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
 
         let destroy_cmd = state.destroy.cmd();
-        if destroy_cmd != "" {
+        if !destroy_cmd.is_empty() {
             let attr_path = AttributePath::new("destroy").index(0).attribute("cmd");
             match self
                 .connect
@@ -370,7 +370,7 @@ where
                 .await
             {
                 Ok(res) => {
-                    if res.stdout.len() > 0 {
+                    if !res.stdout.is_empty() {
                         diags.warning(
                             "`destroy` stdout was not empty",
                             res.stdout,
@@ -378,7 +378,7 @@ where
                         );
                     }
                     if res.status == 0 {
-                        if res.stderr.len() > 0 {
+                        if !res.stderr.is_empty() {
                             diags.warning(
                                 "`destroy` succeeded but stderr was not empty",
                                 res.stderr,
@@ -419,7 +419,7 @@ fn find_modified<'a>(
                     modified.insert(Value::Value(Cow::from(k.as_ref())));
                 }
             }
-            for (k, _) in plan {
+            for k in plan.keys() {
                 if !state.contains_key(k) {
                     modified.insert(Value::Value(Cow::from(k.as_ref())));
                 }
@@ -453,7 +453,7 @@ fn find_update<'a>(
             if found.is_none() {
                 found = Some((update, i));
             }
-        } else if triggers.is_superset(&modified) {
+        } else if triggers.is_superset(modified) {
             if let Some((previous, _)) = found {
                 let previous_triggers = previous.triggers.as_ref().unwrap_or(&empty_set);
                 if previous_triggers.len() > triggers.len() {

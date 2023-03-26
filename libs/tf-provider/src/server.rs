@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
-use std::io::{Seek, SeekFrom};
+use std::io::Seek;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 
@@ -333,10 +333,10 @@ impl TlsConfig {
         let mut cert_buffer = std::io::Cursor::new(server_cert_pem);
         let tls_cert = pemfile::certs(&mut cert_buffer).unwrap();
 
-        cert_buffer.seek(SeekFrom::Start(0))?;
+        cert_buffer.rewind()?;
 
         let raw_cert = env_cert.as_bytes();
-        let x509_cert = x509_parser::pem::parse_x509_pem(raw_cert)?.1.clone();
+        let x509_cert = x509_parser::pem::parse_x509_pem(raw_cert)?.1;
         let mut server_config = rustls::ServerConfig::new(std::sync::Arc::new(CertVerifier {
             cert: x509_cert.contents,
             root_store: client_root_cert_store,

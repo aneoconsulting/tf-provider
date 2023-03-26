@@ -16,7 +16,7 @@ fn prepare_envs<'a>(
     envs: &[(&'a ValueMap<'a, ValueString<'a>>, &'a str)],
 ) -> Vec<(Cow<'a, str>, Cow<'a, str>)> {
     envs.iter()
-        .map(|(env, prefix)| {
+        .flat_map(|(env, prefix)| {
             env.iter().flatten().filter_map(|(k, v)| {
                 Some((
                     Cow::Owned(format!("{}{}", *prefix, k)),
@@ -24,12 +24,11 @@ fn prepare_envs<'a>(
                 ))
             })
         })
-        .flatten()
         .collect()
 }
 
 fn with_env<'a>(
-    base_env: &'a Vec<(Cow<'a, str>, Cow<'a, str>)>,
+    base_env: &'a [(Cow<'a, str>, Cow<'a, str>)],
     extra_env: &'a ValueMap<'a, ValueString<'a>>,
 ) -> impl Iterator<Item = (&'a Cow<'a, str>, &'a Cow<'a, str>)> {
     base_env.iter().map(|(k, v)| (k, v)).chain(

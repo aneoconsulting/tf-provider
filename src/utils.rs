@@ -53,7 +53,7 @@ where
 
 pub trait DisplayJoinable {
     type Joiner<'a>;
-    fn join_with<'a>(self, sep: &'a str) -> Self::Joiner<'a>;
+    fn join_with(self, sep: &str) -> Self::Joiner<'_>;
 }
 
 impl<T, I> DisplayJoinable for T
@@ -63,7 +63,7 @@ where
 {
     type Joiner<'a> = DisplayJoiner<'a, T, I>;
 
-    fn join_with<'a>(self, sep: &'a str) -> Self::Joiner<'a> {
+    fn join_with(self, sep: &str) -> Self::Joiner<'_> {
         DisplayJoiner {
             iter: RefCell::new(self),
             sep,
@@ -79,7 +79,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut sep = "";
         let mut iter = self.iter.try_borrow_mut().or(Err(std::fmt::Error))?;
-        while let Some(elt) = iter.next() {
+        for elt in iter.by_ref() {
             f.write_str(sep)?;
             f.write_fmt(format_args!("{elt}"))?;
             sep = self.sep;

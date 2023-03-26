@@ -1,5 +1,4 @@
 use std::fmt::Debug;
-use std::pin::Pin;
 
 use async_trait::async_trait;
 use rand::distributions::Alphanumeric;
@@ -10,7 +9,6 @@ use tf_provider::{
     map, value, Attribute, AttributeConstraint, AttributePath, AttributeType, Block, Description,
     Diagnostics, NestedBlock, Resource, Schema, Value, ValueEmpty, ValueString,
 };
-use tokio::io::AsyncRead;
 
 use crate::connection::Connection;
 use crate::utils::WithNormalize;
@@ -140,7 +138,7 @@ where
             }
         }
 
-        if diags.errors.len() == 0 {
+        if diags.errors.is_empty() {
             Some(())
         } else {
             None
@@ -149,7 +147,7 @@ where
 
     async fn read<'a>(
         &self,
-        diags: &mut Diagnostics,
+        _diags: &mut Diagnostics,
         state: Self::State<'a>,
         private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
@@ -296,7 +294,7 @@ where
 }
 
 impl<'a, T: Connection> WithNormalize for ResourceState<'a, T> {
-    fn normalize(&mut self, diags: &mut Diagnostics) {
+    fn normalize(&mut self, _diags: &mut Diagnostics) {
         if self.id.is_null() {
             self.id = Value::Unknown;
         }

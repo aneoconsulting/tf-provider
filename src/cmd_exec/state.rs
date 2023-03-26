@@ -144,8 +144,8 @@ where
                     }),
                     "update" => NestedBlock::Set(Block {
                         attributes: map! {
-                            "cmd" => cmd_attribute.clone(),
-                            "env" => env_attribute.clone(),
+                            "cmd" => cmd_attribute,
+                            "env" => env_attribute,
                             "triggers" => Attribute {
                                 attr_type: AttributeType::Set(AttributeType::String.into()),
                                 description: Description::plain(

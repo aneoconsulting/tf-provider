@@ -45,7 +45,7 @@ impl Connection for ConnectionLocal {
         K: AsRef<str> + Send + Sync + 'b,
         V: AsRef<str> + Send + Sync + 'b,
     {
-        if cmd.len() > 0 {
+        if !cmd.is_empty() {
             let mut command = Command::new("sh");
             command.arg("-c").arg(cmd);
             for (k, v) in env {

@@ -102,24 +102,15 @@ impl<T> Value<T> {
     /////////////////////////////////////////////////////////////////////////
     #[inline]
     pub const fn is_value(&self) -> bool {
-        match self {
-            Self::Value(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Value(_))
     }
     #[inline]
     pub const fn is_null(&self) -> bool {
-        match self {
-            Self::Null => true,
-            _ => false,
-        }
+        matches!(self, Self::Null)
     }
     #[inline]
     pub const fn is_unknown(&self) -> bool {
-        match self {
-            Self::Unknown => true,
-            _ => false,
-        }
+        matches!(self, Self::Unknown)
     }
 
     /////////////////////////////////////////////////////////////////////////
@@ -423,7 +414,7 @@ impl<T> Value<&T> {
     }
     pub fn cloned(self) -> Value<T>
     where
-        T: Copy,
+        T: Clone,
     {
         match self {
             Self::Value(x) => Value::Value(x.clone()),
@@ -445,7 +436,7 @@ impl<T> Value<&mut T> {
     }
     pub fn cloned(self) -> Value<T>
     where
-        T: Copy,
+        T: Clone,
     {
         match self {
             Self::Value(x) => Value::Value(x.clone()),

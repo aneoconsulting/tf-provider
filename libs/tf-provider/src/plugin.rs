@@ -25,11 +25,11 @@ impl grpc_broker_server::GrpcBroker for Arc<Server> {
                 tokio::select!{
                     Some(conn_info) = stream.next() => match conn_info {
                         Ok(conn_info) => {
-                            write!(io.stdout(), "relay {}\n", conn_info).unwrap_or(());
+                            writeln!(io.stdout(), "relay {}", conn_info).unwrap_or(());
                             yield conn_info.clone();
                         },
                         Err(status) => {
-                            write!(io.stderr(), "stream error {}\n", status).unwrap_or(());
+                            writeln!(io.stderr(), "stream error {}", status).unwrap_or(());
                         },
                     },
                     _ = token.cancelled() => break,

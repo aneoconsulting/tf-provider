@@ -33,7 +33,7 @@ impl Description {
         }
     }
     /// Create a markdown description
-    pub fn markdown<T>(content: String) -> Self
+    pub fn markdown<T>(content: T) -> Self
     where
         T: ToString,
     {
@@ -166,7 +166,7 @@ fn cvt_attributes_tf6(
                 _ => None,
             }
             .map(|(nesting_mode, attrs)| Object {
-                attributes: cvt_attributes_tf6(&attrs),
+                attributes: cvt_attributes_tf6(attrs),
                 nesting: nesting_mode as i32,
                 min_items: 0,
                 max_items: if nesting_mode == NestingMode::Single {

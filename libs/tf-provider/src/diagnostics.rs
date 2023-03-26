@@ -119,7 +119,7 @@ impl Diagnostic {
         }
         Self {
             summary: summary.into(),
-            detail: detail,
+            detail,
             attribute,
         }
     }

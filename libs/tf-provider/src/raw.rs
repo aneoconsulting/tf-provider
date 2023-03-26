@@ -13,8 +13,8 @@ const NULL_JSON: &str = "null";
 impl RawValue {
     pub fn is_null(&self) -> bool {
         match self {
-            RawValue::MessagePack(mp) => mp.len() == 0 || mp.as_slice() == &NULL_MESSAGE_PACK,
-            RawValue::Json(json) => json.len() == 0 || json.as_slice() == NULL_JSON.as_bytes(),
+            RawValue::MessagePack(mp) => mp.is_empty() || mp.as_slice() == NULL_MESSAGE_PACK,
+            RawValue::Json(json) => json.is_empty() || json.as_slice() == NULL_JSON.as_bytes(),
         }
     }
     pub fn deserialize<'a, T>(&'a self, diags: &mut Diagnostics) -> Option<T>

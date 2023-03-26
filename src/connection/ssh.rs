@@ -125,18 +125,12 @@ impl Connection for ConnectionSsh {
         match &config.host {
             Value::Value(host) => {
                 if host.is_empty() {
-                    diags.error_short(
-                        "`hostname` cannot be empty",
-                        attr_path.clone().attribute("host"),
-                    );
+                    diags.error_short("`hostname` cannot be empty", attr_path.attribute("host"));
                     return None;
                 }
             }
             Value::Null => {
-                diags.error_short(
-                    "`hostname` cannot be null",
-                    attr_path.clone().attribute("host"),
-                );
+                diags.error_short("`hostname` cannot be null", attr_path.attribute("host"));
                 return None;
             }
             Value::Unknown => (),
@@ -311,7 +305,7 @@ impl Client {
                         let Some(msg) = msg else {
                             if let Some(status) = status {
                                 return Ok(ExecutionResult {
-                                    status: status as i32,
+                                    status,
                                     stdout: String::from_utf8(stdout)?,
                                     stderr: String::from_utf8(stderr)?,
                                 })

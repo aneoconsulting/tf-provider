@@ -18,7 +18,7 @@ impl<'a, T: Connection> ResourceState<'a, T> {
         &mut self,
         diags: &mut Diagnostics,
         connect: &T,
-        env: &Vec<(Cow<'b, str>, Cow<'b, str>)>,
+        env: &[(Cow<'b, str>, Cow<'b, str>)],
     ) -> Option<()> {
         read_all(
             diags,
@@ -38,7 +38,7 @@ impl<'a, T: Connection> DataSourceState<'a, T> {
         &mut self,
         diags: &mut Diagnostics,
         connect: &T,
-        env: &Vec<(Cow<'b, str>, Cow<'b, str>)>,
+        env: &[(Cow<'b, str>, Cow<'b, str>)],
     ) -> Option<()> {
         read_all(
             diags,
@@ -59,7 +59,7 @@ async fn read_all<'a, 'b, C, R>(
     connect_config: &Value<C::Config<'a>>,
     reads: &ValueMap<'a, Value<R>>,
     outputs: &mut ValueMap<'a, ValueString<'a>>,
-    env: &Vec<(Cow<'b, str>, Cow<'b, str>)>,
+    env: &[(Cow<'b, str>, Cow<'b, str>)],
     concurrency: ValueNumber,
 ) -> Option<()>
 where
@@ -74,7 +74,7 @@ where
     let reads_default = Default::default();
     let reads = reads.as_ref().unwrap_or(&reads_default);
 
-    let concurrency = concurrency.clone().unwrap_or(4) as usize;
+    let concurrency = concurrency.unwrap_or(4) as usize;
 
     let mut read_tasks = Vec::new();
 
@@ -87,7 +87,7 @@ where
 
             read_tasks.push(async move {
                 let result = connect
-                    .execute(connect_config, cmd, with_env(&env, read.env()))
+                    .execute(connect_config, cmd, with_env(env, read.env()))
                     .await;
                 (name, (value), result)
             });
@@ -111,7 +111,7 @@ where
         match result {
             Ok(res) => {
                 if res.status == 0 {
-                    if res.stderr.len() > 0 {
+                    if !res.stderr.is_empty() {
                         diags.warning(
                             "`read` succeeded but stderr was not empty",
                             res.stderr,

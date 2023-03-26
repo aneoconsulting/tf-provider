@@ -246,7 +246,7 @@ impl tf::provider_server::Provider for Arc<Server> {
                         .plan_create(
                             &mut diags,
                             proposed_state,
-                            config_state.into(),
+                            config_state,
                             provider_meta_state.into(),
                         )
                         .await
