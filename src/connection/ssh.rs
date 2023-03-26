@@ -71,6 +71,8 @@ impl<'a> ConnectionSshConfig<'a> {
 impl Connection for ConnectionSsh {
     const NAME: &'static str = "ssh";
     type Config<'a> = ConnectionSshConfig<'a>;
+    type Reader = tokio::fs::File; // TODO: implements proper read/writer
+    type Writer = tokio::fs::File; // TODO: implements proper read/writer
 
     async fn execute<'a, 'b, I, K, V>(
         &self,
@@ -90,6 +92,22 @@ impl Connection for ConnectionSsh {
         let client = self.get_client(config).await?;
         let result = client.execute(cmd, env).await?;
         Ok(result)
+    }
+
+    /// Return a reader to read a remote file
+    async fn read<'a>(&self, _config: &Self::Config<'a>, _path: &str) -> Result<Self::Reader> {
+        todo!()
+    }
+
+    /// Return a writer to write a remote file
+    async fn write<'a>(
+        &self,
+        _config: &Self::Config<'a>,
+        _path: &str,
+        _mode: u32,
+        _overwrite: bool,
+    ) -> Result<Self::Writer> {
+        todo!()
     }
 
     /// Validate the state is valid

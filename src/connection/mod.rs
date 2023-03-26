@@ -4,6 +4,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 pub mod local;
 pub mod ssh;
@@ -19,6 +20,8 @@ pub struct ExecutionResult {
 pub trait Connection: Send + Sync + 'static + Default {
     const NAME: &'static str;
     type Config<'a>: Send + Sync + Clone + Default + Serialize + for<'de> Deserialize<'de>;
+    type Reader: AsyncRead;
+    type Writer: AsyncWrite;
 
     /// execute a command over the connection
     async fn execute<'a, 'b, I, K, V>(
@@ -33,6 +36,18 @@ pub trait Connection: Send + Sync + 'static + Default {
         I::IntoIter: Send + Sync + 'b,
         K: AsRef<str> + Send + Sync + 'b,
         V: AsRef<str> + Send + Sync + 'b;
+
+    /// Return a reader to read a remote file
+    async fn read<'a>(&self, config: &Self::Config<'a>, path: &str) -> Result<Self::Reader>;
+
+    /// Return a writer to write a remote file
+    async fn write<'a>(
+        &self,
+        config: &Self::Config<'a>,
+        path: &str,
+        mode: u32,
+        overwrite: bool,
+    ) -> Result<Self::Writer>;
 
     /// Validate the state is valid
     async fn validate<'a>(

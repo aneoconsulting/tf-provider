@@ -6,6 +6,7 @@ use async_process::{Command, Output};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tf_provider::{attribute_path::AttributePath, Attribute, Diagnostics};
+use tokio::fs::{File, OpenOptions};
 
 #[derive(Debug, PartialEq, Eq, Default, Clone)]
 pub struct ConnectionLocal {}
@@ -28,6 +29,8 @@ impl TryFrom<Output> for ExecutionResult {
 impl Connection for ConnectionLocal {
     const NAME: &'static str = "local";
     type Config<'a> = ConnectionLocalConfig;
+    type Reader = File;
+    type Writer = File;
 
     async fn execute<'a, 'b, I, K, V>(
         &self,
@@ -52,6 +55,30 @@ impl Connection for ConnectionLocal {
         } else {
             Err(anyhow!("Command must not be empty"))
         }
+    }
+
+    /// Return a reader to read a remote file
+    async fn read<'a>(&self, _config: &Self::Config<'a>, path: &str) -> Result<Self::Reader> {
+        File::open(path).await.map_err(Into::into)
+    }
+
+    /// Return a writer to write a remote file
+    async fn write<'a>(
+        &self,
+        _config: &Self::Config<'a>,
+        path: &str,
+        mode: u32,
+        overwrite: bool,
+    ) -> Result<Self::Writer> {
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .create_new(!overwrite)
+            .mode(mode)
+            .open(path)
+            .await
+            .map_err(Into::into)
     }
 
     /// Validate the state is valid
