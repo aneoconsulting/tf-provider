@@ -3,10 +3,13 @@ use std::borrow::Cow;
 use futures::{stream, StreamExt};
 use tf_provider::{AttributePath, Diagnostics, Value, ValueMap, ValueNumber, ValueString};
 
-use crate::connection::Connection;
+use crate::{
+    connection::Connection,
+    utils::{WithCmd, WithEnv},
+};
 
 use super::{
-    state::{DataSourceState, ResourceState, StateRead},
+    state::{DataSourceState, ResourceState},
     with_env,
 };
 
@@ -50,15 +53,19 @@ impl<'a, T: Connection> DataSourceState<'a, T> {
     }
 }
 
-pub async fn read_all<'a, 'b, T: Connection>(
+async fn read_all<'a, 'b, C, R>(
     diags: &mut Diagnostics,
-    connect: &T,
-    connect_config: &Value<T::Config<'a>>,
-    reads: &ValueMap<'a, Value<StateRead<'a>>>,
+    connect: &C,
+    connect_config: &Value<C::Config<'a>>,
+    reads: &ValueMap<'a, Value<R>>,
     outputs: &mut ValueMap<'a, ValueString<'a>>,
     env: &Vec<(Cow<'b, str>, Cow<'b, str>)>,
     concurrency: ValueNumber,
-) -> Option<()> {
+) -> Option<()>
+where
+    C: Connection,
+    R: WithCmd + WithEnv<Env = ValueMap<'a, ValueString<'a>>>,
+{
     let outputs = outputs.as_mut_option()?;
 
     let connection_default = Default::default();
@@ -76,11 +83,11 @@ pub async fn read_all<'a, 'b, T: Connection>(
             continue;
         }
         if let Some(Value::Value(read)) = reads.get(name) {
-            let cmd = read.cmd.as_str();
+            let cmd = read.cmd();
 
             read_tasks.push(async move {
                 let result = connect
-                    .execute(connect_config, cmd, with_env(&env, &read.env))
+                    .execute(connect_config, cmd, with_env(&env, read.env()))
                     .await;
                 (name, (value), result)
             });
