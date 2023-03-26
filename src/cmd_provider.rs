@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
 use crate::{
-    cmd_exec_resource::CmdExecResource,
+    cmd_exec::CmdExecResource,
     connection::{local::ConnectionLocal, ssh::ConnectionSsh},
 };
 
