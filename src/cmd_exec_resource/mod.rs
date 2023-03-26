@@ -12,18 +12,14 @@ use tf_provider::{
 };
 
 use crate::connection::Connection;
-use crate::utils::{WithCmd, WithNormalize};
-use crate::utils::{WithEnv, WithSchema};
+use crate::utils::{WithCmd, WithEnv, WithNormalize, WithSchema};
 
 mod normalize;
 mod read;
 mod state;
 mod validate;
 
-use read::WithRead;
-use state::State;
-
-use state::StateUpdate;
+use state::{State, StateUpdate};
 
 #[derive(Debug, Default)]
 pub struct CmdExecResource<T: Connection> {
@@ -411,7 +407,7 @@ where
 }
 
 fn prepare_envs<'a>(
-    envs: &[(&'a ValueMap<'a, ValueString<'a>>, &str)],
+    envs: &[(&'a ValueMap<'a, ValueString<'a>>, &'a str)],
 ) -> Vec<(Cow<'a, str>, Cow<'a, str>)> {
     envs.iter()
         .map(|(env, prefix)| {

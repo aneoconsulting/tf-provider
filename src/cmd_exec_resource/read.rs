@@ -1,7 +1,5 @@
 use std::borrow::Cow;
 
-use async_trait::async_trait;
-
 use futures::{stream, StreamExt};
 use tf_provider::{AttributePath, Diagnostics, Value};
 
@@ -9,28 +7,15 @@ use crate::connection::Connection;
 
 use super::{state::State, with_env};
 
-#[async_trait]
-pub(super) trait WithRead {
-    type Connect: Connection;
-    async fn read(
-        &mut self,
-        diags: &mut Diagnostics,
-        connect: &Self::Connect,
-        env: &Vec<(Cow<str>, Cow<str>)>,
-    ) -> Option<()>;
-}
-
-#[async_trait]
-impl<'a, T> WithRead for State<'a, T>
+impl<'a, T> State<'a, T>
 where
     T: Connection,
 {
-    type Connect = T;
-    async fn read(
+    pub async fn read<'b>(
         &mut self,
         diags: &mut Diagnostics,
-        connect: &Self::Connect,
-        env: &Vec<(Cow<str>, Cow<str>)>,
+        connect: &T,
+        env: &Vec<(Cow<'b, str>, Cow<'b, str>)>,
     ) -> Option<()> {
         let state = self.state.as_mut_option()?;
 
