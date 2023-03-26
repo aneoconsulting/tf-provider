@@ -96,5 +96,5 @@ output "data_exec" {
 }
 
 output "file" {
-  value = data.cmd_local_file.pouet
+  value = cmd_local_file.plop
 }

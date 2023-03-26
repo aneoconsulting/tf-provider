@@ -1,6 +1,10 @@
+use std::borrow::BorrowMut;
 use std::fmt::Debug;
+use std::io::ErrorKind;
 
 use async_trait::async_trait;
+use crypto::digest::Digest;
+use crypto::md5::Md5;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
@@ -10,6 +14,7 @@ use tf_provider::{
     Diagnostics, NestedBlock, Resource, Schema, Value, ValueEmpty, ValueString,
 };
 
+use crate::cmd_file::hash_stream::HashingStream;
 use crate::connection::Connection;
 use crate::utils::WithNormalize;
 
@@ -36,6 +41,7 @@ where
     pub mode: ValueString<'a>,
     pub overwrite: Value<bool>,
     pub keep: Value<bool>,
+    pub md5: ValueString<'a>,
     #[serde(with = "value::serde_as_vec")]
     pub connect: Value<T::Config<'a>>,
 }
@@ -90,6 +96,12 @@ where
                         attr_type: AttributeType::Bool,
                         description: Description::plain("Content of the remote file"),
                         constraint: AttributeConstraint::OptionalComputed,
+                        ..Default::default()
+                    },
+                    "md5" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("Fingerprint of the file"),
+                        constraint: AttributeConstraint::Computed,
                         ..Default::default()
                     },
                 },
@@ -147,11 +159,46 @@ where
 
     async fn read<'a>(
         &self,
-        _diags: &mut Diagnostics,
-        state: Self::State<'a>,
+        diags: &mut Diagnostics,
+        mut state: Self::State<'a>,
         private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
+        let default_connect_config = Default::default();
+        let connect_config = state.connect.as_ref().unwrap_or(&default_connect_config);
+
+        let reader = match self.connect.read(connect_config, state.path.as_str()).await {
+            Ok(writer) => writer,
+            Err(err) => {
+                diags.root_error("Could not open file for writing", err.to_string());
+                return None;
+            }
+        };
+        tokio::pin!(reader);
+
+        let reader = HashingStream {
+            digest: Md5::new(),
+            inner: reader,
+        };
+
+        let writer = tokio::io::sink();
+        tokio::pin!(reader, writer);
+
+        match tokio::io::copy(&mut reader, &mut writer).await {
+            Ok(_) => {
+                let md5 = reader.digest.result_str();
+                if md5 != state.md5.as_str() {
+                    state.md5 = Value::Null;
+                }
+            }
+            Err(err) if err.kind() == ErrorKind::NotFound => {
+                return None;
+            }
+            Err(err) => {
+                diags.root_error("Could not read file", err.to_string());
+            }
+        }
+
         Some((state, private_state))
     }
 
@@ -205,7 +252,6 @@ where
         let mut state = planned_state;
         state.normalize(diags);
 
-        state.normalize(diags);
         state.id = ValueString::Value(
             thread_rng()
                 .sample_iter(&Alphanumeric)
@@ -234,6 +280,13 @@ where
             }
         };
         tokio::pin!(writer);
+
+        let writer = HashingStream {
+            digest: Md5::new(),
+            inner: writer,
+        };
+        tokio::pin!(writer);
+
         let mut content = state.content.as_bytes();
 
         match tokio::io::copy(&mut content, &mut writer).await {
@@ -243,6 +296,8 @@ where
                 return None;
             }
         };
+
+        state.md5 = Value::Value(writer.digest.borrow_mut().result_str().into());
 
         Some((state, planned_private_state))
     }
@@ -258,7 +313,6 @@ where
         let mut state = planned_state;
         state.normalize(diags);
 
-        state.normalize(diags);
         if !state.id.is_value() {
             state.id = ValueString::Value(
                 thread_rng()
@@ -268,6 +322,46 @@ where
                     .collect(),
             );
         }
+
+        let default_connect_config = Default::default();
+        let connect_config = state.connect.as_ref().unwrap_or(&default_connect_config);
+
+        let writer = match self
+            .connect
+            .write(
+                connect_config,
+                state.path.as_str(),
+                u32::from_str_radix(state.mode.as_str(), 8).unwrap_or(0o666),
+                true,
+            )
+            .await
+        {
+            Ok(writer) => writer,
+            Err(err) => {
+                diags.root_error("Could not open file for writing", err.to_string());
+                return None;
+            }
+        };
+        tokio::pin!(writer);
+
+        let writer = HashingStream {
+            digest: Md5::new(),
+            inner: writer,
+        };
+        tokio::pin!(writer);
+
+        let mut content = state.content.as_bytes();
+
+        match tokio::io::copy(&mut content, &mut writer).await {
+            Ok(_) => (),
+            Err(err) => {
+                diags.root_error("Could not write to file", err.to_string());
+                return None;
+            }
+        };
+
+        state.md5 = Value::Value(writer.digest.borrow_mut().result_str().into());
+
         Some((state, planned_private_state))
     }
     async fn destroy<'a>(
@@ -285,10 +379,16 @@ where
             .await
         {
             Ok(_) => Some(()),
-            Err(err) => {
-                diags.root_error("Could not delete file", err.to_string());
-                None
-            }
+            Err(err) => match err.downcast_ref::<std::io::Error>() {
+                Some(err) if err.kind() == ErrorKind::NotFound => {
+                    diags.root_warning("File has already been deleted", err.to_string());
+                    Some(())
+                }
+                _ => {
+                    diags.root_warning("Could not delete file", err.to_string());
+                    None
+                }
+            },
         }
     }
 }
@@ -297,6 +397,9 @@ impl<'a, T: Connection> WithNormalize for ResourceState<'a, T> {
     fn normalize(&mut self, _diags: &mut Diagnostics) {
         if self.id.is_null() {
             self.id = Value::Unknown;
+        }
+        if self.md5.is_null() {
+            self.md5 = Value::Unknown;
         }
         if !self.mode.is_value() {
             self.mode = Value::Value("0666".into());

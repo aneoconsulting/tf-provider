@@ -528,6 +528,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "fuchsia-cprng"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
+
+[[package]]
 name = "futures"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -630,6 +636,12 @@ dependencies = [
  "pin-utils",
  "slab",
 ]
+
+[[package]]
+name = "gcc"
+version = "0.3.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f5f3913fa0bfe7ee1fd8248b6b9f42a5af4b9d65ec2dd2c3c26132b950ecfc2"
 
 [[package]]
 name = "generic-array"
@@ -1216,6 +1228,29 @@ dependencies = [
 
 [[package]]
 name = "rand"
+version = "0.3.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64ac302d8f83c0c1974bf758f6b041c6c8ada916fbb44a609158ca8b064cc76c"
+dependencies = [
+ "libc",
+ "rand 0.4.6",
+]
+
+[[package]]
+name = "rand"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "552840b97013b1a26992c11eac34bdd778e464601a4c2054b5f0bff7c6761293"
+dependencies = [
+ "fuchsia-cprng",
+ "libc",
+ "rand_core 0.3.1",
+ "rdrand",
+ "winapi",
+]
+
+[[package]]
+name = "rand"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a6b1679d49b24bbfe0c803429aa1874472f50d9b363131f0e89fc356b544d03"
@@ -1260,6 +1295,21 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a6fdeb83b075e8266dcc8762c22776f6877a63111121f5f8c7411e5be7eed4b"
+dependencies = [
+ "rand_core 0.4.2",
+]
+
+[[package]]
+name = "rand_core"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c33a3c44ca05fa6f1807d8e6743f3824e8509beca625669633be0acbdf509dc"
+
+[[package]]
+name = "rand_core"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90bde5296fc891b0cef12a6d03ddccc162ce7b2aff54160af9338f8d40df6d19"
@@ -1293,8 +1343,17 @@ checksum = "ffbe84efe2f38dea12e9bfc1f65377fdf03e53a18cb3b995faedf7934c7e785b"
 dependencies = [
  "pem",
  "ring",
- "time",
+ "time 0.3.20",
  "yasna",
+]
+
+[[package]]
+name = "rdrand"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "678054eb77286b51581ba43620cc911abf02758c91f93f479767aed0f90458b2"
+dependencies = [
+ "rand_core 0.3.1",
 ]
 
 [[package]]
@@ -1469,6 +1528,25 @@ dependencies = [
  "tokio-stream",
  "yasna",
 ]
+
+[[package]]
+name = "rust-crypto"
+version = "0.2.36"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f76d05d3993fd5f4af9434e8e436db163a12a9d40e1a58a726f27a01dfd12a2a"
+dependencies = [
+ "gcc",
+ "libc",
+ "rand 0.3.23",
+ "rustc-serialize",
+ "time 0.1.45",
+]
+
+[[package]]
+name = "rustc-serialize"
+version = "0.3.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcf128d1287d2ea9d80910b5f1120d0b8eede3fbf1abe91c40d39ea7d51e6fda"
 
 [[package]]
 name = "rusticata-macros"
@@ -1712,12 +1790,13 @@ dependencies = [
  "rmpv",
  "russh",
  "russh-keys",
+ "rust-crypto",
  "rustls",
  "serde",
  "serde_bytes",
  "serde_json",
  "tf-provider",
- "time",
+ "time 0.3.20",
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.4",
@@ -1752,7 +1831,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
- "time",
+ "time 0.3.20",
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.4",
@@ -1793,6 +1872,17 @@ checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
 dependencies = [
  "cfg-if",
  "once_cell",
+]
+
+[[package]]
+name = "time"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
+dependencies = [
+ "libc",
+ "wasi 0.10.0+wasi-snapshot-preview1",
+ "winapi",
 ]
 
 [[package]]
@@ -2159,6 +2249,12 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasi"
+version = "0.10.0+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
+
+[[package]]
+name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
@@ -2361,7 +2457,7 @@ checksum = "aed2e7a52e3744ab4d0c05c20aa065258e84c49fd4226f5191b2ed29712710b4"
 dependencies = [
  "bit-vec",
  "num-bigint",
- "time",
+ "time 0.3.20",
 ]
 
 [[package]]
