@@ -33,7 +33,7 @@ pub use value::{
 macro_rules! map {
     {$($key:expr => $value:expr),*} => {
         {
-            let mut map = HashMap::default();
+            let mut map = std::collections::HashMap::default();
             $(
                 map.insert($key.into(), $value.into());
             )*

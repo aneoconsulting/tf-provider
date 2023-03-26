@@ -49,6 +49,9 @@ pub trait Connection: Send + Sync + 'static + Default {
         overwrite: bool,
     ) -> Result<Self::Writer>;
 
+    /// Delete a file
+    async fn delete<'a>(&self, config: &Self::Config<'a>, path: &str) -> Result<()>;
+
     /// Validate the state is valid
     async fn validate<'a>(
         &self,

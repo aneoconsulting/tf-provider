@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-
 use async_trait::async_trait;
 
 use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
 use crate::{
     cmd_exec::{CmdExecDataSource, CmdExecResource},
-    cmd_file::CmdFileDataSource,
+    cmd_file::{CmdFileDataSource, CmdFileResource},
     connection::{local::ConnectionLocal, ssh::ConnectionSsh},
 };
 
@@ -52,7 +50,9 @@ impl Provider for CmdProvider {
     {
         Some(map! {
             "local_exec" => CmdExecResource::new(ConnectionLocal::default()),
-            "ssh_exec" => CmdExecResource::new(ConnectionSsh::default()),
+            "ssh_exec"   => CmdExecResource::new(ConnectionSsh::default()),
+            "local_file" => CmdFileResource::new(ConnectionLocal::default()),
+            "ssh_file"   => CmdFileResource::new(ConnectionSsh::default()),
         })
     }
 
@@ -64,9 +64,9 @@ impl Provider for CmdProvider {
     > {
         Some(map! {
             "local_exec" => CmdExecDataSource::new(ConnectionLocal::default()),
-            "ssh_exec" => CmdExecDataSource::new(ConnectionSsh::default()),
+            "ssh_exec"   => CmdExecDataSource::new(ConnectionSsh::default()),
             "local_file" => CmdFileDataSource::new(ConnectionLocal::default()),
-            "ssh_file" => CmdFileDataSource::new(ConnectionSsh::default()),
+            "ssh_file"   => CmdFileDataSource::new(ConnectionSsh::default()),
         })
     }
 }

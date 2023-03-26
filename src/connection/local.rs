@@ -81,6 +81,11 @@ impl Connection for ConnectionLocal {
             .map_err(Into::into)
     }
 
+    /// Delete a file
+    async fn delete<'a>(&self, _config: &Self::Config<'a>, path: &str) -> Result<()> {
+        tokio::fs::remove_file(path).await.map_err(Into::into)
+    }
+
     /// Validate the state is valid
     async fn validate<'a>(
         &self,

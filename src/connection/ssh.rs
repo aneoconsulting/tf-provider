@@ -110,6 +110,11 @@ impl Connection for ConnectionSsh {
         todo!()
     }
 
+    /// Delete a file
+    async fn delete<'a>(&self, _config: &Self::Config<'a>, _path: &str) -> Result<()> {
+        todo!()
+    }
+
     /// Validate the state is valid
     async fn validate<'a>(
         &self,
