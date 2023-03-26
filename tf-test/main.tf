@@ -58,89 +58,11 @@ resource "cmd_ssh_exec" "test" {
   read "pouet" {
     cmd = "echo -n pouet"
   }
-  read "a" {
-    cmd = "sleep 1; echo -n a"
-  }
-  read "b" {
-    cmd = "sleep 1; echo -n b"
-  }
-  read "c" {
-    cmd = "sleep 1; echo -n c"
-  }
-  read "d" {
-    cmd = "sleep 1; echo -n d"
-  }
-  read "e" {
-    cmd = "sleep 1; echo -n e"
-  }
-  read "f" {
-    cmd = "sleep 1; echo -n f"
-  }
-  read "g" {
-    cmd = "sleep 1; echo -n g"
-  }
-  read "h" {
-    cmd = "sleep 1; echo -n h"
-  }
-  read "i" {
-    cmd = "sleep 1; echo -n i"
-  }
-  read "j" {
-    cmd = "sleep 1; echo -n j"
-  }
-  read "k" {
-    cmd = "sleep 1; echo -n k"
-  }
-  read "l" {
-    cmd = "sleep 1; echo -n l"
-  }
-  read "m" {
-    cmd = "sleep 1; echo -n m"
-  }
-  read "n" {
-    cmd = "sleep 1; echo -n n"
-  }
-  read "o" {
-    cmd = "sleep 1; echo -n o"
-  }
-  read "p" {
-    cmd = "sleep 1; echo -n p"
-  }
-  read "q" {
-    cmd = "sleep 1; echo -n q"
-  }
-  read "r" {
-    cmd = "sleep 1; echo -n r"
-  }
-  read "s" {
-    cmd = "sleep 1; echo -n s"
-  }
-  read "t" {
-    cmd = "sleep 1; echo -n t"
-  }
-  read "u" {
-    cmd = "sleep 1; echo -n u"
-  }
-  read "v" {
-    cmd = "sleep 1; echo -n v"
-  }
-  read "w" {
-    cmd = "sleep 1; echo -n w"
-  }
-  read "x" {
-    cmd = "sleep 1; echo -n x"
-  }
-  read "y" {
-    cmd = "sleep 1; echo -n y"
-  }
-  read "z" {
-    cmd = "sleep 1; echo -n z"
-  }
 }
 
 data "cmd_local_exec" "pouet" {
   inputs = {
-    a = cmd_ssh_exec.test.state.a
+    a = cmd_ssh_exec.test.state.pouet
   }
 
   read "a" {
