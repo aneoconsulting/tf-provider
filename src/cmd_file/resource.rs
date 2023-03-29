@@ -169,10 +169,15 @@ where
 
         let reader = match self.connect.read(connect_config, state.path.as_str()).await {
             Ok(writer) => writer,
-            Err(err) => {
-                diags.root_error("Could not open file for writing", err.to_string());
-                return None;
-            }
+            Err(err) => match err.downcast_ref::<std::io::Error>() {
+                Some(err) if err.kind() == ErrorKind::NotFound => {
+                    return None;
+                }
+                _ => {
+                    diags.root_error("Could not open file for reading", err.to_string());
+                    return None;
+                }
+            },
         };
         tokio::pin!(reader);
 
@@ -184,15 +189,13 @@ where
         let writer = tokio::io::sink();
         tokio::pin!(reader, writer);
 
-        match tokio::io::copy(&mut reader, &mut writer).await {
+        let copy = tokio::io::copy(&mut reader, &mut writer).await;
+        match &copy {
             Ok(_) => {
                 let md5 = reader.digest.result_str();
                 if md5 != state.md5.as_str() {
                     state.md5 = Value::Null;
                 }
-            }
-            Err(err) if err.kind() == ErrorKind::NotFound => {
-                return None;
             }
             Err(err) => {
                 diags.root_error("Could not read file", err.to_string());

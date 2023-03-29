@@ -180,7 +180,6 @@ impl tf::provider_server::Provider for Arc<Server> {
             } else {
                 None
             }
-            .collect_diagnostics(&mut diags)
             .expand();
 
         Ok(tonic::Response::new(tf::read_resource::Response {
