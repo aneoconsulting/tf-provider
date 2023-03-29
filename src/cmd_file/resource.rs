@@ -255,52 +255,7 @@ where
         let mut state = planned_state;
         state.normalize(diags);
 
-        state.id = ValueString::Value(
-            thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(30)
-                .map(char::from)
-                .collect(),
-        );
-
-        let default_connect_config = Default::default();
-        let connect_config = state.connect.as_ref().unwrap_or(&default_connect_config);
-
-        let writer = match self
-            .connect
-            .write(
-                connect_config,
-                state.path.as_str(),
-                u32::from_str_radix(state.mode.as_str(), 8).unwrap_or(0o666),
-                state.overwrite.unwrap_or(false),
-            )
-            .await
-        {
-            Ok(writer) => writer,
-            Err(err) => {
-                diags.root_error("Could not open file for writing", err.to_string());
-                return None;
-            }
-        };
-        tokio::pin!(writer);
-
-        let writer = HashingStream {
-            digest: Md5::new(),
-            inner: writer,
-        };
-        tokio::pin!(writer);
-
-        let mut content = state.content.as_bytes();
-
-        match tokio::io::copy(&mut content, &mut writer).await {
-            Ok(_) => (),
-            Err(err) => {
-                diags.root_error("Could not write to file", err.to_string());
-                return None;
-            }
-        };
-
-        state.md5 = Value::Value(writer.digest.borrow_mut().result_str().into());
+        self.write_file(diags, &mut state).await?;
 
         Some((state, planned_private_state))
     }
@@ -316,54 +271,7 @@ where
         let mut state = planned_state;
         state.normalize(diags);
 
-        if !state.id.is_value() {
-            state.id = ValueString::Value(
-                thread_rng()
-                    .sample_iter(&Alphanumeric)
-                    .take(30)
-                    .map(char::from)
-                    .collect(),
-            );
-        }
-
-        let default_connect_config = Default::default();
-        let connect_config = state.connect.as_ref().unwrap_or(&default_connect_config);
-
-        let writer = match self
-            .connect
-            .write(
-                connect_config,
-                state.path.as_str(),
-                u32::from_str_radix(state.mode.as_str(), 8).unwrap_or(0o666),
-                true,
-            )
-            .await
-        {
-            Ok(writer) => writer,
-            Err(err) => {
-                diags.root_error("Could not open file for writing", err.to_string());
-                return None;
-            }
-        };
-        tokio::pin!(writer);
-
-        let writer = HashingStream {
-            digest: Md5::new(),
-            inner: writer,
-        };
-        tokio::pin!(writer);
-
-        let mut content = state.content.as_bytes();
-
-        match tokio::io::copy(&mut content, &mut writer).await {
-            Ok(_) => (),
-            Err(err) => {
-                diags.root_error("Could not write to file", err.to_string());
-                return None;
-            }
-        };
-
-        state.md5 = Value::Value(writer.digest.borrow_mut().result_str().into());
+        self.write_file(diags, &mut state).await?;
 
         Some((state, planned_private_state))
     }
@@ -413,5 +321,64 @@ impl<'a, T: Connection> WithNormalize for ResourceState<'a, T> {
         if !self.keep.is_value() {
             self.keep = Value::Value(false);
         }
+    }
+}
+
+impl<T: Connection> CmdFileResource<T> {
+    async fn write_file<'a>(
+        &self,
+        diags: &mut Diagnostics,
+        state: &mut ResourceState<'a, T>,
+    ) -> Option<()> {
+        if !state.id.is_value() {
+            state.id = ValueString::Value(
+                thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(30)
+                    .map(char::from)
+                    .collect(),
+            );
+        }
+
+        let default_connect_config = Default::default();
+        let connect_config = state.connect.as_ref().unwrap_or(&default_connect_config);
+
+        let writer = match self
+            .connect
+            .write(
+                connect_config,
+                state.path.as_str(),
+                u32::from_str_radix(state.mode.as_str(), 8).unwrap_or(0o666),
+                true,
+            )
+            .await
+        {
+            Ok(writer) => writer,
+            Err(err) => {
+                diags.root_error("Could not open file for writing", err.to_string());
+                return None;
+            }
+        };
+        tokio::pin!(writer);
+
+        let writer = HashingStream {
+            digest: Md5::new(),
+            inner: writer,
+        };
+        tokio::pin!(writer);
+
+        let mut content = state.content.as_bytes();
+
+        match tokio::io::copy(&mut content, &mut writer).await {
+            Ok(_) => (),
+            Err(err) => {
+                diags.root_error("Could not write to file", err.to_string());
+                return None;
+            }
+        };
+
+        state.md5 = Value::Value(writer.digest.borrow_mut().result_str().into());
+
+        Some(())
     }
 }
