@@ -1,10 +1,9 @@
-use std::borrow::BorrowMut;
 use std::fmt::Debug;
 use std::io::ErrorKind;
 
 use async_trait::async_trait;
-use crypto::digest::Digest;
 use crypto::md5::Md5;
+use crypto::sha1::Sha1;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
@@ -42,6 +41,7 @@ where
     pub overwrite: Value<bool>,
     pub keep: Value<bool>,
     pub md5: ValueString<'a>,
+    pub sha1: ValueString<'a>,
     #[serde(with = "value::serde_as_vec")]
     pub connect: Value<T::Config<'a>>,
 }
@@ -100,7 +100,13 @@ where
                     },
                     "md5" => Attribute {
                         attr_type: AttributeType::String,
-                        description: Description::plain("Fingerprint of the file"),
+                        description: Description::plain("MD5 fingerprint of the file (hex)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha1" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA1 fingerprint of the file (hex)"),
                         constraint: AttributeConstraint::Computed,
                         ..Default::default()
                     },
@@ -182,7 +188,7 @@ where
         tokio::pin!(reader);
 
         let reader = HashingStream {
-            digest: Md5::new(),
+            digest: (Md5::new(), Sha1::new()),
             inner: reader,
         };
 
@@ -192,9 +198,13 @@ where
         let copy = tokio::io::copy(&mut reader, &mut writer).await;
         match &copy {
             Ok(_) => {
-                let md5 = reader.digest.result_str();
+                let (md5, sha1) = reader.fingerprints();
+
                 if md5 != state.md5.as_str() {
                     state.md5 = Value::Null;
+                }
+                if sha1 != state.sha1.as_str() {
+                    state.sha1 = Value::Null;
                 }
             }
             Err(err) => {
@@ -312,6 +322,9 @@ impl<'a, T: Connection> WithNormalize for ResourceState<'a, T> {
         if self.md5.is_null() {
             self.md5 = Value::Unknown;
         }
+        if self.sha1.is_null() {
+            self.sha1 = Value::Unknown;
+        }
         if !self.mode.is_value() {
             self.mode = Value::Value("0666".into());
         }
@@ -362,7 +375,7 @@ impl<T: Connection> CmdFileResource<T> {
         tokio::pin!(writer);
 
         let writer = HashingStream {
-            digest: Md5::new(),
+            digest: (Md5::new(), Sha1::new()),
             inner: writer,
         };
         tokio::pin!(writer);
@@ -377,7 +390,10 @@ impl<T: Connection> CmdFileResource<T> {
             }
         };
 
-        state.md5 = Value::Value(writer.digest.borrow_mut().result_str().into());
+        let (md5, sha1) = writer.fingerprints();
+
+        state.md5 = Value::Value(md5.into());
+        state.sha1 = Value::Value(sha1.into());
 
         Some(())
     }
