@@ -17,16 +17,16 @@ use tokio::io::AsyncRead;
 
 use crate::cmd_file::hash_stream::HashingStream;
 use crate::connection::Connection;
-use crate::utils::WithNormalize;
 
 #[derive(Debug, Default)]
 pub struct CmdFileResource<T: Connection> {
+    pub(super) sensitive: bool,
     pub(super) connect: T,
 }
 
 impl<T: Connection> CmdFileResource<T> {
-    pub fn new(connect: T) -> Self {
-        Self { connect }
+    pub fn new(sensitive: bool, connect: T) -> Self {
+        Self { sensitive, connect }
     }
 }
 
@@ -82,18 +82,21 @@ where
                         attr_type: AttributeType::String,
                         description: Description::plain("Content of the remote file"),
                         constraint: AttributeConstraint::OptionalComputed,
+                        sensitive: self.sensitive,
                         ..Default::default()
                     },
                     "content_base64" => Attribute {
                         attr_type: AttributeType::String,
                         description: Description::plain("Content of the remote file encoded in base64"),
                         constraint: AttributeConstraint::OptionalComputed,
+                        sensitive: self.sensitive,
                         ..Default::default()
                     },
                     "content_source" => Attribute {
                         attr_type: AttributeType::String,
                         description: Description::plain("Content of the remote file from a local file"),
                         constraint: AttributeConstraint::OptionalComputed,
+                        sensitive: self.sensitive,
                         ..Default::default()
                     },
                     "mode" => Attribute {
@@ -240,18 +243,18 @@ where
 
     async fn plan_create<'a>(
         &self,
-        diags: &mut Diagnostics,
+        _diags: &mut Diagnostics,
         proposed_state: Self::State<'a>,
         _config_state: Self::State<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = proposed_state;
-        state.normalize(diags);
+        self.normalize(&mut state);
         Some((state, Default::default()))
     }
     async fn plan_update<'a>(
         &self,
-        diags: &mut Diagnostics,
+        _diags: &mut Diagnostics,
         prior_state: Self::State<'a>,
         proposed_state: Self::State<'a>,
         config_state: Self::State<'a>,
@@ -279,7 +282,7 @@ where
             state.md5 = Value::Unknown;
             state.sha1 = Value::Unknown;
         }
-        state.normalize(diags);
+        self.normalize(&mut state);
         Some((state, prior_private_state, vec![]))
     }
 
@@ -302,7 +305,7 @@ where
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state;
-        state.normalize(diags);
+        self.normalize(&mut state);
 
         self.write_file(diags, &mut state).await?;
 
@@ -327,7 +330,7 @@ where
         if config_state.content_source.is_null() {
             state.content_source = Value::Null;
         }
-        state.normalize(diags);
+        self.normalize(&mut state);
 
         self.write_file(diags, &mut state).await?;
 
@@ -362,30 +365,28 @@ where
     }
 }
 
-impl<'a, T: Connection> WithNormalize for ResourceState<'a, T> {
-    fn normalize(&mut self, _diags: &mut Diagnostics) {
-        if self.id.is_null() {
-            self.id = Value::Unknown;
+impl<T: Connection> CmdFileResource<T> {
+    fn normalize(&self, state: &mut ResourceState<'_, T>) {
+        if state.id.is_null() {
+            state.id = Value::Unknown;
         }
-        if self.md5.is_null() {
-            self.md5 = Value::Unknown;
+        if state.md5.is_null() {
+            state.md5 = Value::Unknown;
         }
-        if self.sha1.is_null() {
-            self.sha1 = Value::Unknown;
+        if state.sha1.is_null() {
+            state.sha1 = Value::Unknown;
         }
-        if !self.mode.is_value() {
-            self.mode = Value::Value("0666".into());
+        if !state.mode.is_value() {
+            let mode = if self.sensitive { "0600" } else { "0666" };
+            state.mode = Value::Value(mode.into());
         }
-        if !self.overwrite.is_value() {
-            self.overwrite = Value::Value(false);
+        if !state.overwrite.is_value() {
+            state.overwrite = Value::Value(false);
         }
-        if !self.keep.is_value() {
-            self.keep = Value::Value(false);
+        if !state.keep.is_value() {
+            state.keep = Value::Value(false);
         }
     }
-}
-
-impl<T: Connection> CmdFileResource<T> {
     async fn write_file<'a>(
         &self,
         diags: &mut Diagnostics,

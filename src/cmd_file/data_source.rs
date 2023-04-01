@@ -14,12 +14,13 @@ use crate::connection::Connection;
 
 #[derive(Debug, Default)]
 pub struct CmdFileDataSource<T: Connection> {
+    pub(super) sensitive: bool,
     pub(super) connect: T,
 }
 
 impl<T: Connection> CmdFileDataSource<T> {
-    pub fn new(connect: T) -> Self {
-        Self { connect }
+    pub fn new(sensitive: bool, connect: T) -> Self {
+        Self { sensitive, connect }
     }
 }
 
@@ -61,6 +62,7 @@ where
                         attr_type: AttributeType::String,
                         description: Description::plain("Content of the remote file"),
                         constraint: AttributeConstraint::Computed,
+                        sensitive: self.sensitive,
                         ..Default::default()
                     },
                 },

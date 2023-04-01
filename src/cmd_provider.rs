@@ -51,8 +51,10 @@ impl Provider for CmdProvider {
         Some(map! {
             "local_exec" => CmdExecResource::new(ConnectionLocal::default()),
             "ssh_exec"   => CmdExecResource::new(ConnectionSsh::default()),
-            "local_file" => CmdFileResource::new(ConnectionLocal::default()),
-            "ssh_file"   => CmdFileResource::new(ConnectionSsh::default()),
+            "local_file" => CmdFileResource::new(false, ConnectionLocal::default()),
+            "ssh_file"   => CmdFileResource::new(false, ConnectionSsh::default()),
+            "local_sensitive_file" => CmdFileResource::new(true, ConnectionLocal::default()),
+            "ssh_sensitive_file"   => CmdFileResource::new(true, ConnectionSsh::default()),
         })
     }
 
@@ -65,8 +67,10 @@ impl Provider for CmdProvider {
         Some(map! {
             "local_exec" => CmdExecDataSource::new(ConnectionLocal::default()),
             "ssh_exec"   => CmdExecDataSource::new(ConnectionSsh::default()),
-            "local_file" => CmdFileDataSource::new(ConnectionLocal::default()),
-            "ssh_file"   => CmdFileDataSource::new(ConnectionSsh::default()),
+            "local_file" => CmdFileDataSource::new(false, ConnectionLocal::default()),
+            "ssh_file"   => CmdFileDataSource::new(false, ConnectionSsh::default()),
+            "local_sensitive_file" => CmdFileDataSource::new(true, ConnectionLocal::default()),
+            "ssh_sensitive_file"   => CmdFileDataSource::new(true, ConnectionSsh::default()),
         })
     }
 }
