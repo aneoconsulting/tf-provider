@@ -12,6 +12,8 @@ use tf_provider::{
     map, value, Attribute, AttributeConstraint, AttributePath, AttributeType, Block, Description,
     Diagnostics, NestedBlock, Resource, Schema, Value, ValueEmpty, ValueString,
 };
+use tokio::fs::File;
+use tokio::io::AsyncRead;
 
 use crate::cmd_file::hash_stream::HashingStream;
 use crate::connection::Connection;
@@ -37,6 +39,8 @@ where
     pub id: ValueString<'a>,
     pub path: ValueString<'a>,
     pub content: ValueString<'a>,
+    pub content_base64: ValueString<'a>,
+    pub content_source: ValueString<'a>,
     pub mode: ValueString<'a>,
     pub overwrite: Value<bool>,
     pub keep: Value<bool>,
@@ -77,7 +81,19 @@ where
                     "content" => Attribute {
                         attr_type: AttributeType::String,
                         description: Description::plain("Content of the remote file"),
-                        constraint: AttributeConstraint::Required,
+                        constraint: AttributeConstraint::OptionalComputed,
+                        ..Default::default()
+                    },
+                    "content_base64" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("Content of the remote file encoded in base64"),
+                        constraint: AttributeConstraint::OptionalComputed,
+                        ..Default::default()
+                    },
+                    "content_source" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("Content of the remote file from a local file"),
+                        constraint: AttributeConstraint::OptionalComputed,
                         ..Default::default()
                     },
                     "mode" => Attribute {
@@ -144,8 +160,15 @@ where
             Value::Unknown => (),
         }
 
-        if config.content.is_null() {
-            diags.error_short("`content` cannot be null", AttributePath::new("content"));
+        let nb_values = config.content.is_value() as i32
+            + config.content_base64.is_value() as i32
+            + config.content_source.is_value() as i32;
+        let nb_unknowns = config.content.is_unknown() as i32
+            + config.content_base64.is_unknown() as i32
+            + config.content_source.is_unknown() as i32;
+
+        if !matches!((nb_values, nb_unknowns), (1, _) | (0, 1..)) {
+            diags.root_error("Invalid content specification", "Exactly one of `content`, `content_base64`, and `content_source` must be given. The others must be null.");
         }
 
         if let Value::Value(mode) = &config.mode {
@@ -229,9 +252,9 @@ where
     async fn plan_update<'a>(
         &self,
         diags: &mut Diagnostics,
-        _prior_state: Self::State<'a>,
+        prior_state: Self::State<'a>,
         proposed_state: Self::State<'a>,
-        _config_state: Self::State<'a>,
+        config_state: Self::State<'a>,
         prior_private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(
@@ -240,6 +263,22 @@ where
         Vec<tf_provider::attribute_path::AttributePath>,
     )> {
         let mut state = proposed_state;
+        if config_state.content.is_null() {
+            state.content = Value::Null;
+        }
+        if config_state.content_base64.is_null() {
+            state.content_base64 = Value::Null;
+        }
+        if config_state.content_source.is_null() {
+            state.content_source = Value::Null;
+        }
+        if state.content != prior_state.content
+            || state.content_base64 != prior_state.content_base64
+            || state.content_source != prior_state.content_source
+        {
+            state.md5 = Value::Unknown;
+            state.sha1 = Value::Unknown;
+        }
         state.normalize(diags);
         Some((state, prior_private_state, vec![]))
     }
@@ -274,11 +313,20 @@ where
         diags: &mut Diagnostics,
         _prior_state: Self::State<'a>,
         planned_state: Self::State<'a>,
-        _config_state: Self::State<'a>,
+        config_state: Self::State<'a>,
         planned_private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state;
+        if config_state.content.is_null() {
+            state.content = Value::Null;
+        }
+        if config_state.content_base64.is_null() {
+            state.content_base64 = Value::Null;
+        }
+        if config_state.content_source.is_null() {
+            state.content_source = Value::Null;
+        }
         state.normalize(diags);
 
         self.write_file(diags, &mut state).await?;
@@ -374,15 +422,65 @@ impl<T: Connection> CmdFileResource<T> {
         };
         tokio::pin!(writer);
 
-        let writer = HashingStream {
+        let mut writer = HashingStream {
             digest: (Md5::new(), Sha1::new()),
             inner: writer,
         };
-        tokio::pin!(writer);
 
-        let mut content = state.content.as_bytes();
+        enum Content<'b> {
+            Raw(&'b [u8]),
+            Base64(Vec<u8>),
+            File(File),
+        }
 
-        match tokio::io::copy(&mut content, &mut writer).await {
+        let content = if let Value::Value(content) = &state.content {
+            Content::Raw(content.as_bytes())
+        } else if let Value::Value(base64) = &state.content_base64 {
+            match base64::decode(base64.as_bytes()) {
+                Ok(decoded) => Content::Base64(decoded),
+                Err(err) => {
+                    diags.error(
+                        "Invalid base64",
+                        err.to_string(),
+                        AttributePath::new("content_base64"),
+                    );
+                    return None;
+                }
+            }
+        } else if let Value::Value(filename) = &state.content_source {
+            match File::open(filename.as_ref()).await {
+                Ok(file) => Content::File(file),
+                Err(err) => {
+                    diags.error(
+                        "Could not open file",
+                        err.to_string(),
+                        AttributePath::new("content_source"),
+                    );
+                    return None;
+                }
+            }
+        } else {
+            diags.root_error_short("No content provided");
+            return None;
+        };
+
+        enum ContentReader<'b> {
+            Raw(&'b [u8]),
+            File(File),
+        }
+
+        let mut content = match content {
+            Content::Raw(raw) => ContentReader::Raw(raw),
+            Content::Base64(ref decoded) => ContentReader::Raw(decoded.as_slice()),
+            Content::File(file) => ContentReader::File(file),
+        };
+
+        let reader = match &mut content {
+            ContentReader::Raw(raw) => raw as &mut (dyn AsyncRead + Send + Unpin),
+            ContentReader::File(file) => file as &mut (dyn AsyncRead + Send + Unpin),
+        };
+
+        match tokio::io::copy(reader, &mut writer).await {
             Ok(_) => (),
             Err(err) => {
                 diags.root_error("Could not write to file", err.to_string());
