@@ -10,7 +10,7 @@ use tf_provider::{
     Description, Diagnostics, NestedBlock, Schema, Value, ValueEmpty, ValueString,
 };
 
-use crate::connection::Connection;
+use crate::{cmd_file::hash_stream::DefaultHashingStream, connection::Connection};
 
 #[derive(Debug, Default)]
 pub struct CmdFileDataSource<T: Connection> {
@@ -34,6 +34,13 @@ where
     #[serde(with = "value::serde_as_vec")]
     pub connect: Value<T::Config<'a>>,
     pub content: Value<String>,
+    pub content_base64: Value<String>,
+    pub md5: ValueString<'a>,
+    pub sha1: ValueString<'a>,
+    pub sha256: ValueString<'a>,
+    pub sha512: ValueString<'a>,
+    pub sha256_base64: ValueString<'a>,
+    pub sha512_base64: ValueString<'a>,
 }
 
 #[async_trait]
@@ -63,6 +70,49 @@ where
                         description: Description::plain("Content of the remote file"),
                         constraint: AttributeConstraint::Computed,
                         sensitive: self.sensitive,
+                        ..Default::default()
+                    },
+                    "content_base64" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("Content of the remote file base64 encoded"),
+                        constraint: AttributeConstraint::Computed,
+                        sensitive: self.sensitive,
+                        ..Default::default()
+                    },
+                    "md5" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("MD5 fingerprint of the file (hex)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha1" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA1 fingerprint of the file (hex)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha256" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA256 fingerprint of the file (hex)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha512" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA512 fingerprint of the file (hex)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha256_base64" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA256 fingerprint of the file (base64)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha512_base64" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA512 fingerprint of the file (base64)"),
+                        constraint: AttributeConstraint::Computed,
                         ..Default::default()
                     },
                 },
@@ -124,16 +174,29 @@ where
             }
         };
         tokio::pin!(reader);
+        let reader = DefaultHashingStream::new(reader);
+        tokio::pin!(reader);
 
-        let mut content = String::new();
+        let mut content = Vec::new();
 
-        if let Err(err) = reader.read_to_string(&mut content).await {
+        if let Err(err) = reader.read_to_end(&mut content).await {
             diags.root_error("Could not read file", err.to_string());
             return None;
         }
-
         let mut output = config;
-        output.content = Value::Value(content);
+
+        output.content_base64 = Value::Value(base64::encode(content.as_slice()));
+        output.content = Value::Value(String::from_utf8_lossy(content.as_slice()).to_string());
+
+        let (md5, sha1, sha256, sha512) = reader.fingerprints_hex();
+        let (_, _, sha256_base64, sha512_base64) = reader.fingerprints_base64();
+
+        output.md5 = Value::Value(md5.into());
+        output.sha1 = Value::Value(sha1.into());
+        output.sha256 = Value::Value(sha256.into());
+        output.sha512 = Value::Value(sha512.into());
+        output.sha256_base64 = Value::Value(sha256_base64.into());
+        output.sha512_base64 = Value::Value(sha512_base64.into());
 
         Some(output)
     }

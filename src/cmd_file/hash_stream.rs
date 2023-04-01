@@ -1,6 +1,11 @@
 use std::{borrow::BorrowMut, pin::Pin, task::Poll};
 
-use crypto::digest::Digest;
+use crypto::{
+    digest::Digest,
+    md5::Md5,
+    sha1::Sha1,
+    sha2::{Sha256, Sha512},
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub(super) struct HashingStream<D, I> {
@@ -9,7 +14,7 @@ pub(super) struct HashingStream<D, I> {
 }
 
 macro_rules! impl_all {
-    ($x:ident ; $e:ident) => {$x};
+    ($x:ty ; $e:ident) => {$x};
     ($($e:ident)+) => {
 
         impl<$($e: Digest + Unpin,)+ Inner: AsyncRead + Unpin> AsyncRead for HashingStream<($($e,)+), Inner> {
@@ -64,9 +69,24 @@ macro_rules! impl_all {
 
         impl<$($e: Digest + Unpin,)+ Inner> HashingStream<($($e,)+), Inner> {
             #[allow(non_snake_case, dead_code)]
-            pub(super) fn fingerprints(&mut self) -> ($(impl_all!(String; $e),)+) {
+            pub(super) fn fingerprints_hex(&mut self) -> ($(impl_all!(String; $e),)+) {
                 let ($($e,)+) = &mut self.digest;
                 ($($e.result_str(),)+)
+            }
+        }
+
+        impl<$($e: Digest + Unpin,)+ Inner> HashingStream<($($e,)+), Inner> {
+            #[allow(non_snake_case, dead_code)]
+            pub(super) fn fingerprints_base64(&mut self) -> ($(impl_all!(String; $e),)+) {
+                use base64;
+                let ($($e,)+) = &mut self.digest;
+                ($({
+                    let x = $e;
+                    let nbytes = x.output_bytes();
+                    let mut out = vec![0; nbytes];
+                    x.result(&mut out);
+                    base64::encode(out.as_slice())
+                },)+)
             }
         }
 
@@ -86,3 +106,14 @@ impl_all!(A B C D E F G H I);
 impl_all!(A B C D E F G H I J);
 impl_all!(A B C D E F G H I J K);
 impl_all!(A B C D E F G H I J K L);
+
+pub(super) type DefaultHashingStream<Inner> = HashingStream<(Md5, Sha1, Sha256, Sha512), Inner>;
+
+impl<Inner> DefaultHashingStream<Inner> {
+    pub(super) fn new(inner: Inner) -> Self {
+        Self {
+            digest: (Md5::new(), Sha1::new(), Sha256::new(), Sha512::new()),
+            inner,
+        }
+    }
+}

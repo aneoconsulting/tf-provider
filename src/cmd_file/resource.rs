@@ -2,8 +2,6 @@ use std::fmt::Debug;
 use std::io::ErrorKind;
 
 use async_trait::async_trait;
-use crypto::md5::Md5;
-use crypto::sha1::Sha1;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
@@ -15,7 +13,7 @@ use tf_provider::{
 use tokio::fs::File;
 use tokio::io::AsyncRead;
 
-use crate::cmd_file::hash_stream::HashingStream;
+use super::hash_stream::DefaultHashingStream;
 use crate::connection::Connection;
 
 #[derive(Debug, Default)]
@@ -46,6 +44,10 @@ where
     pub keep: Value<bool>,
     pub md5: ValueString<'a>,
     pub sha1: ValueString<'a>,
+    pub sha256: ValueString<'a>,
+    pub sha512: ValueString<'a>,
+    pub sha256_base64: ValueString<'a>,
+    pub sha512_base64: ValueString<'a>,
     #[serde(with = "value::serde_as_vec")]
     pub connect: Value<T::Config<'a>>,
 }
@@ -126,6 +128,30 @@ where
                     "sha1" => Attribute {
                         attr_type: AttributeType::String,
                         description: Description::plain("SHA1 fingerprint of the file (hex)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha256" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA256 fingerprint of the file (hex)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha512" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA512 fingerprint of the file (hex)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha256_base64" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA256 fingerprint of the file (base64)"),
+                        constraint: AttributeConstraint::Computed,
+                        ..Default::default()
+                    },
+                    "sha512_base64" => Attribute {
+                        attr_type: AttributeType::String,
+                        description: Description::plain("SHA512 fingerprint of the file (base64)"),
                         constraint: AttributeConstraint::Computed,
                         ..Default::default()
                     },
@@ -213,10 +239,7 @@ where
         };
         tokio::pin!(reader);
 
-        let reader = HashingStream {
-            digest: (Md5::new(), Sha1::new()),
-            inner: reader,
-        };
+        let reader = DefaultHashingStream::new(reader);
 
         let writer = tokio::io::sink();
         tokio::pin!(reader, writer);
@@ -224,13 +247,22 @@ where
         let copy = tokio::io::copy(&mut reader, &mut writer).await;
         match &copy {
             Ok(_) => {
-                let (md5, sha1) = reader.fingerprints();
+                let (md5, sha1, sha256, sha512) = reader.fingerprints_hex();
+                let (_, _, sha256_base64, sha512_base64) = reader.fingerprints_base64();
 
-                if md5 != state.md5.as_str() {
+                if md5 != state.md5.as_str()
+                    || sha1 != state.sha1.as_str()
+                    || sha256 != state.sha256.as_str()
+                    || sha512 != state.sha512.as_str()
+                    || sha256_base64 != state.sha256_base64.as_str()
+                    || sha512_base64 != state.sha512_base64.as_str()
+                {
                     state.md5 = Value::Null;
-                }
-                if sha1 != state.sha1.as_str() {
                     state.sha1 = Value::Null;
+                    state.sha256 = Value::Null;
+                    state.sha512 = Value::Null;
+                    state.sha256_base64 = Value::Null;
+                    state.sha512_base64 = Value::Null;
                 }
             }
             Err(err) => {
@@ -281,6 +313,10 @@ where
         {
             state.md5 = Value::Unknown;
             state.sha1 = Value::Unknown;
+            state.sha256 = Value::Unknown;
+            state.sha512 = Value::Unknown;
+            state.sha256_base64 = Value::Unknown;
+            state.sha512_base64 = Value::Unknown;
         }
         self.normalize(&mut state);
         Some((state, prior_private_state, vec![]))
@@ -376,6 +412,18 @@ impl<T: Connection> CmdFileResource<T> {
         if state.sha1.is_null() {
             state.sha1 = Value::Unknown;
         }
+        if state.sha256.is_null() {
+            state.sha256 = Value::Unknown;
+        }
+        if state.sha512.is_null() {
+            state.sha512 = Value::Unknown;
+        }
+        if state.sha256_base64.is_null() {
+            state.sha256_base64 = Value::Unknown;
+        }
+        if state.sha512_base64.is_null() {
+            state.sha512_base64 = Value::Unknown;
+        }
         if !state.mode.is_value() {
             let mode = if self.sensitive { "0600" } else { "0666" };
             state.mode = Value::Value(mode.into());
@@ -423,10 +471,7 @@ impl<T: Connection> CmdFileResource<T> {
         };
         tokio::pin!(writer);
 
-        let mut writer = HashingStream {
-            digest: (Md5::new(), Sha1::new()),
-            inner: writer,
-        };
+        let mut writer = DefaultHashingStream::new(writer);
 
         enum Content<'b> {
             Raw(&'b [u8]),
@@ -489,10 +534,15 @@ impl<T: Connection> CmdFileResource<T> {
             }
         };
 
-        let (md5, sha1) = writer.fingerprints();
+        let (md5, sha1, sha256, sha512) = writer.fingerprints_hex();
+        let (_, _, sha256_base64, sha512_base64) = writer.fingerprints_base64();
 
         state.md5 = Value::Value(md5.into());
         state.sha1 = Value::Value(sha1.into());
+        state.sha256 = Value::Value(sha256.into());
+        state.sha512 = Value::Value(sha512.into());
+        state.sha256_base64 = Value::Value(sha256_base64.into());
+        state.sha512_base64 = Value::Value(sha512_base64.into());
 
         Some(())
     }
