@@ -227,6 +227,28 @@ impl Message {
     }
 }
 
+impl From<Error> for Message {
+    fn from(_: Error) -> Self {
+        Message::Status(Status {
+            code: StatusCode::BadMessage as u32,
+            error: "Bad Message".into(),
+            language: "en".into(),
+        })
+    }
+}
+
+impl From<std::io::Error> for Message {
+    fn from(value: std::io::Error) -> Self {
+        Self::Status(value.into())
+    }
+}
+
+impl From<russh::Error> for Message {
+    fn from(value: russh::Error) -> Self {
+        Self::Status(value.into())
+    }
+}
+
 /*
 SFTP protocol frame
 

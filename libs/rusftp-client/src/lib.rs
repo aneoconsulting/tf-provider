@@ -1,6 +1,9 @@
-pub mod decode;
-pub mod encode;
-pub mod error;
-pub mod message;
+mod client;
+mod decode;
+mod encode;
+mod error;
+mod message;
 
+pub use client::SftpClient;
 pub use error::Error;
+pub use message::*;
