@@ -4,7 +4,7 @@ use crate::connection::{Connection, ExecutionResult};
 use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
 use bytes::Bytes;
-use rusftp_client::{Read, SftpClient, StatusCode};
+use rusftp_client::{Message, Read, SftpClient, StatusCode};
 use russh::client::{Config, Handle, Handler};
 use serde::{Deserialize, Serialize};
 use tf_provider::{
@@ -117,8 +117,24 @@ impl Connection for ConnectionSsh {
     }
 
     /// Delete a file
-    async fn delete<'a>(&self, _config: &Self::Config<'a>, _path: &str) -> Result<()> {
-        todo!()
+    async fn delete<'a>(&self, config: &Self::Config<'a>, path: &str) -> Result<()> {
+        let client = self.get_client(config).await?;
+        let client = SftpClient::new(client.handle.channel_open_session().await?).await?;
+
+        if let Message::Status(status) = client
+            .send(rusftp_client::Message::Remove(path.to_owned().into()))
+            .await
+        {
+            if status.code == StatusCode::Ok as u32 {
+                Ok(())
+            } else {
+                Err(status.into())
+            }
+        } else {
+            Err(StatusCode::BadMessage
+                .to_status("Bad Response".into())
+                .into())
+        }
     }
 
     /// Validate the state is valid

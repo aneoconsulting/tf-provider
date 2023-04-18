@@ -6,7 +6,8 @@ use crate::Error;
 
 use super::FileAttrs;
 
-super::strong_alias!(Path: Bytes);
+pub type Path = Bytes;
+//super::strong_alias!(Path: Bytes);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PathAttrs {
