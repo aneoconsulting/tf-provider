@@ -106,6 +106,34 @@ impl std::fmt::Display for Status {
     }
 }
 
+impl TryFrom<u32> for StatusCode {
+    type Error = u32;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        if value == Self::Ok as u32 {
+            Ok(Self::Ok)
+        } else if value == Self::Eof as u32 {
+            Ok(Self::Eof)
+        } else if value == Self::NoSuchFile as u32 {
+            Ok(Self::NoSuchFile)
+        } else if value == Self::PermissionDenied as u32 {
+            Ok(Self::PermissionDenied)
+        } else if value == Self::Failure as u32 {
+            Ok(Self::Failure)
+        } else if value == Self::BadMessage as u32 {
+            Ok(Self::BadMessage)
+        } else if value == Self::NoConnection as u32 {
+            Ok(Self::NoConnection)
+        } else if value == Self::ConnectionLost as u32 {
+            Ok(Self::ConnectionLost)
+        } else if value == Self::OpUnsupported as u32 {
+            Ok(Self::OpUnsupported)
+        } else {
+            Err(value)
+        }
+    }
+}
+
 impl From<std::io::ErrorKind> for StatusCode {
     fn from(value: std::io::ErrorKind) -> Self {
         match value {
@@ -151,3 +179,24 @@ impl From<russh::Error> for Status {
         }
     }
 }
+
+impl From<Status> for std::io::Error {
+    fn from(value: Status) -> Self {
+        let kind = match StatusCode::try_from(value.code) {
+            Ok(StatusCode::Ok) => std::io::ErrorKind::Other,
+            Ok(StatusCode::Eof) => std::io::ErrorKind::UnexpectedEof,
+            Ok(StatusCode::NoSuchFile) => std::io::ErrorKind::NotFound,
+            Ok(StatusCode::PermissionDenied) => std::io::ErrorKind::PermissionDenied,
+            Ok(StatusCode::Failure) => std::io::ErrorKind::Other,
+            Ok(StatusCode::BadMessage) => std::io::ErrorKind::InvalidData,
+            Ok(StatusCode::NoConnection) => std::io::ErrorKind::Other,
+            Ok(StatusCode::ConnectionLost) => std::io::ErrorKind::Other,
+            Ok(StatusCode::OpUnsupported) => std::io::ErrorKind::Unsupported,
+            Err(_) => std::io::ErrorKind::Other,
+        };
+
+        Self::new(kind, value)
+    }
+}
+
+impl std::error::Error for Status {}

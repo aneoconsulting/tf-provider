@@ -17,30 +17,13 @@ pub struct SftpClient {
 impl SftpClient {
     pub async fn new(mut channel: Channel<Msg>) -> Result<Self, std::io::Error> {
         // Start SFTP subsystem
-        match channel.request_subsystem(true, "sftp").await {
+        match channel.request_subsystem(false, "sftp").await {
             Ok(_) => (),
             Err(russh::Error::IO(err)) => {
                 return Err(err);
             }
             Err(err) => {
                 return Err(std::io::Error::new(std::io::ErrorKind::Other, err));
-            }
-        }
-
-        // Ensure SFTP subsystem is started correctly
-        match channel.wait().await {
-            Some(ChannelMsg::Success) => (),
-            Some(ChannelMsg::Failure) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to start SFTP subsystem",
-                ));
-            }
-            _ => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Failed to start SFTP subsystem",
-                ));
             }
         }
 

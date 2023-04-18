@@ -70,8 +70,13 @@ data "cmd_local_exec" "pouet" {
   }
 }
 
-data "cmd_local_file" "pouet" {
-  path = "a"
+data "cmd_ssh_file" "pouet" {
+  connect {
+    host    = "10.42.0.2"
+    user    = "dummy-user"
+    keyfile = "dummy.ed25519"
+  }
+  path = "/etc/resolv.conf"
 }
 
 resource "cmd_local_file" "plop" {
@@ -93,6 +98,9 @@ output "data_exec" {
   }
 }
 
+output "datafile" {
+  value = data.cmd_ssh_file.pouet
+}
 output "file" {
   value = cmd_local_file.plop
 }

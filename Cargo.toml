@@ -10,6 +10,9 @@ edition = "2021"
 [dependencies.tf-provider]
 path = "libs/tf-provider"
 
+[dependencies.rusftp-client]
+path = "libs/rusftp-client"
+
 [dependencies]
 async-process = "1.6"
 tonic = { version = "0.6", features = ["tls"] }
@@ -51,6 +54,7 @@ x509-parser = "0.12"
 time = "0.3"
 pem = "1.1"
 rust-crypto = "0.2"
+bytes = "1.4"
 
 [build-dependencies]
 tonic-build = "0.6"
