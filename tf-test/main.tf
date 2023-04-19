@@ -79,7 +79,12 @@ data "cmd_ssh_file" "pouet" {
   path = "/etc/resolv.conf"
 }
 
-resource "cmd_local_file" "plop" {
+resource "cmd_ssh_file" "plop" {
+  connect {
+    host    = "10.42.0.2"
+    user    = "dummy-user"
+    keyfile = "dummy.ed25519"
+  }
   path           = "plop.txt"
   content_source = "client.crt"
   overwrite      = true
@@ -102,5 +107,5 @@ output "datafile" {
   value = data.cmd_ssh_file.pouet
 }
 output "file" {
-  value = cmd_local_file.plop
+  value = cmd_ssh_file.plop
 }

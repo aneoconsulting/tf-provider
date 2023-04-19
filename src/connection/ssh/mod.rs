@@ -13,9 +13,11 @@ use tokio::sync::Mutex;
 
 mod client;
 mod reader;
+mod writer;
 
 use client::{Client, ClientHandler};
 pub use reader::SftpReader;
+pub use writer::SftpWriter;
 
 #[derive(Default, Clone)]
 pub struct ConnectionSsh {
@@ -74,8 +76,8 @@ impl<'a> ConnectionSshConfig<'a> {
 impl Connection for ConnectionSsh {
     const NAME: &'static str = "ssh";
     type Config<'a> = ConnectionSshConfig<'a>;
-    type Reader = SftpReader; // TODO: implements proper read/writer
-    type Writer = tokio::fs::File; // TODO: implements proper read/writer
+    type Reader = SftpReader;
+    type Writer = SftpWriter;
 
     async fn execute<'a, 'b, I, K, V>(
         &self,
@@ -106,12 +108,13 @@ impl Connection for ConnectionSsh {
     /// Return a writer to write a remote file
     async fn write<'a>(
         &self,
-        _config: &Self::Config<'a>,
-        _path: &str,
-        _mode: u32,
-        _overwrite: bool,
+        config: &Self::Config<'a>,
+        path: &str,
+        mode: u32,
+        overwrite: bool,
     ) -> Result<Self::Writer> {
-        todo!()
+        let client = self.get_client(config).await?;
+        Ok(SftpWriter::new(&client.handle, path, mode, overwrite).await?)
     }
 
     /// Delete a file

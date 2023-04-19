@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use futures::Future;
 use russh::client::Msg;
 use russh::Channel;
 use russh::ChannelMsg;
@@ -102,6 +103,7 @@ impl SftpClient {
                         };
 
                         id += 1;
+                        //eprintln!("Request #{id}: {message:?}");
                         match message.encode(id) {
                             Ok(frame) => {
                                 if let Err(err) = channel.data(frame.as_ref()).await {
@@ -128,6 +130,7 @@ impl SftpClient {
                         let mut buf = data.as_ref();
                         match Message::decode(&mut buf) {
                             Ok((id, message)) => {
+                                //eprintln!("Response #{id}: {message:?}");
                                 if let Some(tx) = onflight.remove(&id) {
                                     _ = tx.send(message);
                                 } else {
@@ -156,5 +159,9 @@ impl SftpClient {
                 StatusCode::Failure.to_message("Could get reply from SFTP client".into()),
             )
         }
+    }
+
+    pub fn close(&self) -> impl Future<Output = ()> + '_ {
+        self.commands.closed()
     }
 }
