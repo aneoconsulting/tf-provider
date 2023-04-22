@@ -343,7 +343,8 @@ where
         let mut state = planned_state;
         self.normalize(&mut state);
 
-        self.write_file(diags, &mut state).await?;
+        let overwrite = state.overwrite.unwrap_or(false);
+        self.write_file(diags, &mut state, overwrite).await?;
 
         Some((state, planned_private_state))
     }
@@ -368,7 +369,7 @@ where
         }
         self.normalize(&mut state);
 
-        self.write_file(diags, &mut state).await?;
+        self.write_file(diags, &mut state, true).await?;
 
         Some((state, planned_private_state))
     }
@@ -439,6 +440,7 @@ impl<T: Connection> CmdFileResource<T> {
         &self,
         diags: &mut Diagnostics,
         state: &mut ResourceState<'a, T>,
+        overwrite: bool,
     ) -> Option<()> {
         if !state.id.is_value() {
             state.id = ValueString::Value(
@@ -459,7 +461,7 @@ impl<T: Connection> CmdFileResource<T> {
                 connect_config,
                 state.path.as_str(),
                 u32::from_str_radix(state.mode.as_str(), 8).unwrap_or(0o666),
-                true,
+                overwrite,
             )
             .await
         {

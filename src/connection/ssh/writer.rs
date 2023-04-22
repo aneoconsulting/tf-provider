@@ -28,6 +28,28 @@ impl SftpWriter {
         if overwrite {
             pflags |= PFlags::TRUNCATE as u32;
         } else {
+            eprintln!("Check if file already exists");
+            // Check if file exist in case the EXCLUDE flag is not taken into account
+            match client
+                .send(rusftp_client::Message::LStat(filename.to_owned().into()))
+                .await
+            {
+                rusftp_client::Message::Attrs(_) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::AlreadyExists,
+                        "File already exists",
+                    )
+                    .into());
+                }
+                rusftp_client::Message::Status(status) => {
+                    if status.code != StatusCode::NoSuchFile as u32 {
+                        return Err(std::io::Error::from(status).into());
+                    }
+                }
+                _ => {
+                    return Err(anyhow!("Bad Message"));
+                }
+            }
             pflags |= PFlags::EXCLUDE as u32;
         }
 
