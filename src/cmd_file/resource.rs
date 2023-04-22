@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::io::ErrorKind;
 
 use async_trait::async_trait;
+use base64::Engine;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
@@ -484,7 +485,7 @@ impl<T: Connection> CmdFileResource<T> {
         let content = if let Value::Value(content) = &state.content {
             Content::Raw(content.as_bytes())
         } else if let Value::Value(base64) = &state.content_base64 {
-            match base64::decode(base64.as_bytes()) {
+            match base64::engine::general_purpose::STANDARD.decode(base64.as_bytes()) {
                 Ok(decoded) => Content::Base64(decoded),
                 Err(err) => {
                     diags.error(

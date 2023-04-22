@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt;
 
@@ -185,7 +186,8 @@ where
         }
         let mut output = config;
 
-        output.content_base64 = Value::Value(base64::encode(content.as_slice()));
+        output.content_base64 =
+            Value::Value(base64::engine::general_purpose::STANDARD.encode(content.as_slice()));
         output.content = Value::Value(String::from_utf8_lossy(content.as_slice()).to_string());
 
         let (md5, sha1, sha256, sha512) = reader.fingerprints_hex();

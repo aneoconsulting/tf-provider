@@ -6,6 +6,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
+use base64::Engine;
 use futures::TryFutureExt;
 use rcgen::{BasicConstraints, IsCa};
 use rustls::internal::msgs::handshake::DigitallySignedStruct;
@@ -146,7 +147,7 @@ pub async fn serve_dynamic(name: String, provider: Box<dyn DynamicProvider>) -> 
             "{}|6|tcp|{}|grpc|{}",
             CORE_PROTOCOL_VERSION,
             endpoint,
-            base64::encode_config(der, base64::STANDARD_NO_PAD)
+            base64::engine::general_purpose::STANDARD_NO_PAD.encode(der),
         );
         Ok(())
     }
@@ -324,10 +325,7 @@ impl TlsConfig {
         )))?;
 
         let server_cert_der = server_cert.serialize_der_with_signer(&server_cert)?;
-        let p = pem::Pem {
-            tag: "CERTIFICATE".to_string(),
-            contents: server_cert_der.clone(),
-        };
+        let p = pem::Pem::new("CERTIFICATE".to_string(), server_cert_der.clone());
         let server_cert_pem = pem::encode(&p);
 
         let mut cert_buffer = std::io::Cursor::new(server_cert_pem);

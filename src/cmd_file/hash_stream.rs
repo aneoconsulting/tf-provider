@@ -85,7 +85,7 @@ macro_rules! impl_all {
                     let nbytes = x.output_bytes();
                     let mut out = vec![0; nbytes];
                     x.result(&mut out);
-                    base64::encode(out.as_slice())
+                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, out.as_slice())
                 },)+)
             }
         }
