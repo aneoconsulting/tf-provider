@@ -19,6 +19,9 @@ mod symlink;
 mod version;
 mod write;
 
+pub mod decoder;
+pub mod encoder;
+
 pub use attrs::{FileAttrs, FileOwner, FilePermisions, FileTime};
 pub use data::Data;
 pub use extended_reply::ExtendedReply;

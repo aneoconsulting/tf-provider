@@ -17,6 +17,7 @@ pub struct SftpClient {
 
 impl SftpClient {
     pub async fn new(mut channel: Channel<Msg>) -> Result<Self, std::io::Error> {
+        super::dummy::test();
         // Start SFTP subsystem
         match channel.request_subsystem(false, "sftp").await {
             Ok(_) => (),

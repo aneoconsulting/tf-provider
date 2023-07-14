@@ -2,6 +2,7 @@
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
         "./libs/tf-provider/Cargo.toml",
-        "./libs/rusftp-client/Cargo.toml"
+        "./libs/rusftp-client/Cargo.toml",
+        "./libs/rusftp-macro/Cargo.toml"
     ]
 }
