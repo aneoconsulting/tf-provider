@@ -3,7 +3,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc};
 use crate::connection::{Connection, ExecutionResult};
 use anyhow::Result;
 use async_trait::async_trait;
-use rusftp_client::{Message, Path, SftpClient, StatusCode};
+use rusftp_client::{Message, Path, Remove, SftpClient, StatusCode};
 use serde::{Deserialize, Serialize};
 use tf_provider::{
     map, Attribute, AttributeConstraint, AttributePath, AttributeType, Description, Diagnostics,
@@ -123,9 +123,12 @@ impl Connection for ConnectionSsh {
         let client = SftpClient::new(client.handle.channel_open_session().await?).await?;
 
         if let Message::Status(status) = client
-            .send(rusftp_client::Message::Remove {
-                path: Path(path.to_owned().into()),
-            })
+            .send(
+                Remove {
+                    path: Path(path.to_owned().into()),
+                }
+                .into(),
+            )
             .await
         {
             if status.code == StatusCode::Ok as u32 {

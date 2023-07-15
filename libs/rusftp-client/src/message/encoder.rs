@@ -5,48 +5,28 @@ use crate::Error;
 
 pub struct SftpEncoder {
     pub(crate) buf: Vec<u8>,
-    pub(crate) id: Option<u32>,
     current_field: &'static str,
 }
 
 impl SftpEncoder {
-    pub fn new(buf: Vec<u8>, id: u32) -> Self {
+    pub fn new(buf: Vec<u8>) -> Self {
         Self {
             buf,
-            id: Some(id),
             current_field: "",
         }
     }
 
-    fn serialize_id(&mut self) -> Result<(), Error> {
-        if let Some(id) = self.id {
-            self.id = None;
-            if self.buf.remaining_mut() >= std::mem::size_of::<u32>() {
-                self.buf.put_u32(id);
-            } else {
-                return Err(Error::NotEnoughData);
-            }
-        }
-        Ok(())
-    }
-
     fn encode_length(&self) -> bool {
         !self.current_field.ends_with("_implicit_length")
-    }
-    fn skip_field(&self) -> bool {
-        matches!(self.current_field, "id" | "version")
     }
 }
 
 macro_rules! serialize {
     ($serialize:ident, $put:ident, $ty:ty) => {
         fn $serialize(self, v: $ty) -> Result<Self::Ok, Self::Error> {
-            if self.skip_field() {
-                return Ok(());
-            }
             if self.buf.remaining_mut() >= std::mem::size_of::<$ty>() {
                 self.buf.$put(v);
-                self.serialize_id()
+                Ok(())
             } else {
                 Err(Error::NotEnoughData)
             }
@@ -110,9 +90,6 @@ impl<'a> ser::Serializer for &'a mut SftpEncoder {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
         let len = v.len();
 
         if len >= 0x100000000 {
@@ -123,17 +100,14 @@ impl<'a> ser::Serializer for &'a mut SftpEncoder {
                 self.buf.put_u32(len as u32);
             }
             self.buf.put(v);
-            self.serialize_id()
+            Ok(())
         } else {
             Err(Error::NotEnoughData)
         }
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        self.serialize_id()
+        Ok(())
     }
 
     fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Self::Ok, Self::Error>

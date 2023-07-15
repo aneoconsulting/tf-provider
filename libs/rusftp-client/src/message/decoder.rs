@@ -8,22 +8,16 @@ use crate::Error;
 
 pub struct SftpDecoder<'de> {
     pub(crate) buf: &'de [u8],
-    id: Option<u32>,
     current_field: &'static str,
 }
 
 macro_rules! decode {
     ($decode:ident, $get:ident, $ty:ty) => {
         fn $decode(&mut self) -> Result<$ty, Error> {
-            if let Some(id) = self.skip_field() {
-                return Ok(id as $ty);
-            }
             if self.buf.remaining() < std::mem::size_of::<$ty>() {
                 return Err(Error::NotEnoughData);
             }
-            let value = self.buf.$get();
-            self.decode_id()?;
-            Ok(value)
+            Ok(self.buf.$get())
         }
     };
 }
@@ -44,31 +38,11 @@ impl<'de> SftpDecoder<'de> {
     pub fn new(buf: &'de [u8]) -> Self {
         Self {
             buf,
-            id: None,
             current_field: "",
         }
     }
-    pub fn get_id(&self) -> Option<u32> {
-        self.id
-    }
     fn decode_length(&self) -> bool {
         !self.current_field.ends_with("_implicit_length")
-    }
-    fn skip_field(&self) -> Option<u32> {
-        if matches!(self.current_field, "id" | "version") {
-            self.id
-        } else {
-            None
-        }
-    }
-    fn decode_id(&mut self) -> Result<(), Error> {
-        if self.id.is_none() {
-            if self.buf.remaining() < std::mem::size_of::<u32>() {
-                return Err(Error::NotEnoughData);
-            }
-            self.id = Some(self.buf.get_u32());
-        }
-        Ok(())
     }
 
     decode!(decode_u8, get_u8, u8);

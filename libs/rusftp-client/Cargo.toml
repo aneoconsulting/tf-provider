@@ -7,10 +7,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-
-[dependencies.rusftp-macro]
-path = "../rusftp-macro"
-
 [dependencies]
 bytes = { version = "1.4", features = ["serde"] }
 futures = "0.3"

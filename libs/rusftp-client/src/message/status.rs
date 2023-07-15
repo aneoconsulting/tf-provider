@@ -1,8 +1,3 @@
-/*
-SSH_FXP_STATUS: 101
-| u32: id | u32: status code | u32: error length | u8[error length]: error | u32: language length | u8[language length]: language |
- */
-
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 

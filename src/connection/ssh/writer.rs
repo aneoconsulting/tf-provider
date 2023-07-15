@@ -1,7 +1,7 @@
 use std::{future::Future, io::ErrorKind, pin::Pin, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use rusftp_client::{FileAttrs, PFlags, Path, SftpClient, StatusCode};
+use rusftp_client::{pflags, SftpClient, StatusCode};
 use russh::client::Handle;
 use tokio::io::AsyncWrite;
 
@@ -24,16 +24,19 @@ impl SftpWriter {
     ) -> Result<Self> {
         let client = SftpClient::new(handle.channel_open_session().await?).await?;
 
-        let mut pflags = (PFlags::WRITE as u32) | (PFlags::CREATE as u32);
+        let mut flags = pflags::WRITE | pflags::CREATE;
         if overwrite {
-            pflags |= PFlags::TRUNCATE as u32;
+            flags |= pflags::TRUNCATE;
         } else {
             eprintln!("Check if file already exists");
             // Check if file exist in case the EXCLUDE flag is not taken into account
             match client
-                .send(rusftp_client::Message::LStat {
-                    path: Path(filename.to_owned().into()),
-                })
+                .send(
+                    rusftp_client::LStat {
+                        path: rusftp_client::Path(filename.to_owned().into()),
+                    }
+                    .into(),
+                )
                 .await
             {
                 rusftp_client::Message::Attrs { .. } => {
@@ -52,18 +55,21 @@ impl SftpWriter {
                     return Err(anyhow!("Bad Message"));
                 }
             }
-            pflags |= PFlags::EXCLUDE as u32;
+            flags |= pflags::EXCLUDE;
         }
 
         let handle = match client
-            .send(rusftp_client::Message::Open {
-                filename: Path(filename.to_owned().into()),
-                pflags,
-                attrs: FileAttrs {
-                    perms: Some(mode),
-                    ..Default::default()
-                },
-            })
+            .send(
+                rusftp_client::Open {
+                    filename: rusftp_client::Path(filename.to_owned().into()),
+                    pflags: flags,
+                    attrs: rusftp_client::Attrs {
+                        perms: Some(mode),
+                        ..Default::default()
+                    },
+                }
+                .into(),
+            )
             .await
         {
             rusftp_client::Message::Status(status) => {
@@ -77,7 +83,7 @@ impl SftpWriter {
 
         Ok(SftpWriter {
             client: Arc::new(client),
-            handle: rusftp_client::MessageHandle(handle),
+            handle,
             offset: 0,
             eof: false,
             request: None,
@@ -105,14 +111,17 @@ impl AsyncWrite for SftpWriter {
             let handle = self.handle.clone();
             let offset = self.offset;
             let length = buf.len().min(32768); // read at most 32K
-            let data = rusftp_client::MessageData(buf[0..length].to_owned().into());
+            let data = rusftp_client::Data(buf[0..length].to_owned().into());
             self.request.get_or_insert(Box::pin(async move {
                 match client
-                    .send(rusftp_client::Message::Write {
-                        handle,
-                        offset,
-                        data,
-                    })
+                    .send(
+                        rusftp_client::Write {
+                            handle,
+                            offset,
+                            data,
+                        }
+                        .into(),
+                    )
                     .await
                 {
                     rusftp_client::Message::Status(status) => {

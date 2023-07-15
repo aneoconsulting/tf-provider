@@ -1,32 +1,17 @@
-/*
-SSH_FXP_ATTRS: 105
-| u32: id | u32: attr flags | {if size in flags} u64: size | {if uid/gid in flags} u32 : uid | {if uid/gid in flags} u32 : gid | {if perm in flags} u32: perms | {if acmodtime in flags} u32: atime | {if acmodtime in flags} u32: mtime |
-
-    Flags:
-        SIZE: 0x00000001
-        UIDGID: 0x00000002
-        PERMISSIONS: 0x00000004
-        ACMODTIME: 0x00000008
-
-    File type: (on permission)
-        FIFO: 0x1000
-        CHR: 0x2000
-        DIR: 0x4000
-        BLK: 0x6000
-        REG: 0x8000
-        LNK: 0xA000
-        NAM: 0x5000
- */
-
 use serde::{ser::SerializeTuple, Deserialize, Serialize};
-use std::default::Default;
 
-use super::FileAttrs;
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+pub struct Attrs {
+    pub size: Option<u64>,
+    pub owner: Option<Owner>,
+    pub perms: Option<u32>,
+    pub time: Option<Time>,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(u32)]
 #[non_exhaustive]
-pub enum FilePermisions {
+pub enum Permisions {
     // Permissions for others
     OX = 0x0001,
     OW = 0x0002,
@@ -54,13 +39,13 @@ pub enum FilePermisions {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub struct FileOwner {
+pub struct Owner {
     pub uid: u32,
     pub gid: u32,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
-pub struct FileTime {
+pub struct Time {
     pub atime: u32,
     pub mtime: u32,
 }
@@ -75,7 +60,7 @@ enum AttrFlags {
     Time = 0x00000008,
 }
 
-impl Serialize for FileAttrs {
+impl Serialize for Attrs {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -114,14 +99,14 @@ macro_rules! next {
     };
 }
 
-impl<'de> Deserialize<'de> for FileAttrs {
+impl<'de> Deserialize<'de> for Attrs {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         struct Visitor;
         impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = FileAttrs;
+            type Value = Attrs;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 write!(
@@ -134,7 +119,7 @@ impl<'de> Deserialize<'de> for FileAttrs {
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                let mut attrs = FileAttrs::default();
+                let mut attrs = Attrs::default();
                 let attr_flags: u32 = next!(seq, "attr_flags");
 
                 if (attr_flags & AttrFlags::Size as u32) != 0 {

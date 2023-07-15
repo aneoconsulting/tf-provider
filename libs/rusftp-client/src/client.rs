@@ -6,6 +6,7 @@ use russh::Channel;
 use russh::ChannelMsg;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::Init;
 use crate::Message;
 use crate::StatusCode;
 use crate::Version;
@@ -28,7 +29,7 @@ impl SftpClient {
         }
 
         // Init SFTP handshake
-        let init_message = Message::Init(Version {
+        let init_message = Message::Init(Init {
             version: 3,
             extensions: Default::default(),
         });
@@ -153,7 +154,7 @@ impl SftpClient {
             StatusCode::Failure.to_message("Could not send request to SFTP client".into())
         } else {
             rx.await.unwrap_or(
-                StatusCode::Failure.to_message("Could get reply from SFTP client".into()),
+                StatusCode::Failure.to_message("Could not get reply from SFTP client".into()),
             )
         }
     }
