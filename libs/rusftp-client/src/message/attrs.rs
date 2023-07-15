@@ -107,6 +107,13 @@ impl Serialize for FileAttrs {
     }
 }
 
+macro_rules! next {
+    ($seq:expr, $field:expr) => {
+        $seq.next_element()?
+            .ok_or(serde::de::Error::missing_field($field))?
+    };
+}
+
 impl<'de> Deserialize<'de> for FileAttrs {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -128,45 +135,27 @@ impl<'de> Deserialize<'de> for FileAttrs {
                 A: serde::de::SeqAccess<'de>,
             {
                 let mut attrs = FileAttrs::default();
-                let attr_flags: u32 = seq
-                    .next_element()?
-                    .ok_or(serde::de::Error::missing_field("attr_flags"))?;
+                let attr_flags: u32 = next!(seq, "attr_flags");
 
                 if (attr_flags & AttrFlags::Size as u32) != 0 {
-                    attrs.size = Some(
-                        seq.next_element()?
-                            .ok_or(serde::de::Error::missing_field("attr_size"))?,
-                    );
+                    attrs.size = Some(next!(seq, "attr_size"));
                 } else {
-                    seq.next_element()?
-                        .ok_or(serde::de::Error::missing_field("attr_size"))?;
+                    next!(seq, "attr_size");
                 }
                 if (attr_flags & AttrFlags::Owner as u32) != 0 {
-                    attrs.owner = Some(
-                        seq.next_element()?
-                            .ok_or(serde::de::Error::missing_field("attr_owner"))?,
-                    );
+                    attrs.owner = Some(next!(seq, "attr_owner"));
                 } else {
-                    seq.next_element()?
-                        .ok_or(serde::de::Error::missing_field("attr_owner"))?;
+                    next!(seq, "attr_owner");
                 }
                 if (attr_flags & AttrFlags::Perms as u32) != 0 {
-                    attrs.perms = Some(
-                        seq.next_element()?
-                            .ok_or(serde::de::Error::missing_field("attr_perms"))?,
-                    );
+                    attrs.perms = Some(next!(seq, "attr_perms"));
                 } else {
-                    seq.next_element()?
-                        .ok_or(serde::de::Error::missing_field("attr_perms"))?;
+                    next!(seq, "attr_perms");
                 }
                 if (attr_flags & AttrFlags::Time as u32) != 0 {
-                    attrs.time = Some(
-                        seq.next_element()?
-                            .ok_or(serde::de::Error::missing_field("attr_time"))?,
-                    );
+                    attrs.time = Some(next!(seq, "attr_time"));
                 } else {
-                    seq.next_element()?
-                        .ok_or(serde::de::Error::missing_field("attr_time"))?;
+                    next!(seq, "attr_time");
                 }
 
                 Ok(attrs)

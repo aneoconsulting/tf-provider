@@ -141,14 +141,8 @@ pub enum Message {
 impl Message {
     pub fn encode(&self, id: u32) -> Result<Bytes, Error> {
         let id = match self {
-            Message::Init(Version {
-                version,
-                extensions: _,
-            }) => *version,
-            Message::Version(Version {
-                version,
-                extensions: _,
-            }) => *version,
+            Message::Init(Version { version, .. }) => *version,
+            Message::Version(Version { version, .. }) => *version,
             _ => id,
         };
         let mut encoder = SftpEncoder::new(Vec::with_capacity(16), id);

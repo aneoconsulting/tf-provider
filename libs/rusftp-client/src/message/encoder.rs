@@ -38,6 +38,40 @@ impl SftpEncoder {
     }
 }
 
+macro_rules! serialize {
+    ($serialize:ident, $put:ident, $ty:ty) => {
+        fn $serialize(self, v: $ty) -> Result<Self::Ok, Self::Error> {
+            if self.skip_field() {
+                return Ok(());
+            }
+            if self.buf.remaining_mut() >= std::mem::size_of::<$ty>() {
+                self.buf.$put(v);
+                self.serialize_id()
+            } else {
+                Err(Error::NotEnoughData)
+            }
+        }
+    };
+    (trait $trait:ident: $serialize:ident $($key:ident)?) => {
+        impl<'a> ser::$trait for &'a mut SftpEncoder {
+            type Ok = ();
+            type Error = Error;
+
+            fn $serialize<T: ?Sized>(&mut self, $($key: &'static str,)? value: &T) -> Result<(), Self::Error>
+            where
+                T: serde::Serialize,
+            {
+                $(self.current_field = $key;)?
+                value.serialize(&mut **self)
+            }
+
+            fn end(self) -> Result<Self::Ok, Self::Error> {
+                Ok(())
+            }
+        }
+    };
+}
+
 impl<'a> ser::Serializer for &'a mut SftpEncoder {
     type Ok = ();
     type Error = Error;
@@ -50,172 +84,25 @@ impl<'a> ser::Serializer for &'a mut SftpEncoder {
     type SerializeStruct = Self;
     type SerializeStructVariant = Self;
 
+    serialize!(serialize_i8, put_i8, i8);
+    serialize!(serialize_i16, put_i16, i16);
+    serialize!(serialize_i32, put_i32, i32);
+    serialize!(serialize_i64, put_i64, i64);
+    serialize!(serialize_i128, put_i128, i128);
+    serialize!(serialize_u8, put_u8, u8);
+    serialize!(serialize_u16, put_u16, u16);
+    serialize!(serialize_u32, put_u32, u32);
+    serialize!(serialize_u64, put_u64, u64);
+    serialize!(serialize_u128, put_u128, u128);
+    serialize!(serialize_f32, put_f32, f32);
+    serialize!(serialize_f64, put_f64, f64);
+
     fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<u8>() {
-            self.buf.put_u8(v as u8);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<i8>() {
-            self.buf.put_i8(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<i16>() {
-            self.buf.put_i16(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<i32>() {
-            self.buf.put_i32(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<i64>() {
-            self.buf.put_i64(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<i128>() {
-            self.buf.put_i128(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<u8>() {
-            self.buf.put_u8(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<u16>() {
-            self.buf.put_u16(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<u32>() {
-            self.buf.put_u32(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<u64>() {
-            self.buf.put_u64(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<u128>() {
-            self.buf.put_u128(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<f32>() {
-            self.buf.put_f32(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
-    }
-
-    fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<f64>() {
-            self.buf.put_f64(v);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
+        self.serialize_u8(v as u8)
     }
 
     fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        if self.buf.remaining_mut() >= std::mem::size_of::<u32>() {
-            self.buf.put_u32(v as u32);
-            self.serialize_id()
-        } else {
-            Err(Error::NotEnoughData)
-        }
+        self.serialize_u32(v as u32)
     }
 
     fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error> {
@@ -257,17 +144,11 @@ impl<'a> ser::Serializer for &'a mut SftpEncoder {
     }
 
     fn serialize_unit(self) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        self.serialize_id()
+        self.serialize_none()
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<Self::Ok, Self::Error> {
-        if self.skip_field() {
-            return Ok(());
-        }
-        self.serialize_id()
+        self.serialize_none()
     }
 
     fn serialize_unit_variant(
@@ -384,67 +265,13 @@ impl<'a> ser::Serializer for &'a mut SftpEncoder {
     }
 }
 
-impl<'a> ser::SerializeSeq for &'a mut SftpEncoder {
-    type Ok = ();
-    type Error = Error;
+serialize!(trait SerializeSeq: serialize_element);
+serialize!(trait SerializeTuple: serialize_element);
+serialize!(trait SerializeTupleStruct: serialize_field);
+serialize!(trait SerializeTupleVariant: serialize_field);
+serialize!(trait SerializeStruct: serialize_field key);
+serialize!(trait SerializeStructVariant: serialize_field key);
 
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: serde::Serialize,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-
-impl<'a> ser::SerializeTuple for &'a mut SftpEncoder {
-    type Ok = ();
-    type Error = Error;
-
-    fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: serde::Serialize,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-impl<'a> ser::SerializeTupleStruct for &'a mut SftpEncoder {
-    type Ok = ();
-    type Error = Error;
-
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: serde::Serialize,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-impl<'a> ser::SerializeTupleVariant for &'a mut SftpEncoder {
-    type Ok = ();
-    type Error = Error;
-
-    fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<(), Self::Error>
-    where
-        T: serde::Serialize,
-    {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
 impl<'a> ser::SerializeMap for &'a mut SftpEncoder {
     type Ok = ();
     type Error = Error;
@@ -460,46 +287,6 @@ impl<'a> ser::SerializeMap for &'a mut SftpEncoder {
     where
         T: serde::Serialize,
     {
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-impl<'a> ser::SerializeStruct for &'a mut SftpEncoder {
-    type Ok = ();
-    type Error = Error;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: serde::Serialize,
-    {
-        self.current_field = key;
-        value.serialize(&mut **self)
-    }
-
-    fn end(self) -> Result<Self::Ok, Self::Error> {
-        Ok(())
-    }
-}
-impl<'a> ser::SerializeStructVariant for &'a mut SftpEncoder {
-    type Ok = ();
-    type Error = Error;
-
-    fn serialize_field<T: ?Sized>(
-        &mut self,
-        key: &'static str,
-        value: &T,
-    ) -> Result<(), Self::Error>
-    where
-        T: serde::Serialize,
-    {
-        self.current_field = key;
         value.serialize(&mut **self)
     }
 
