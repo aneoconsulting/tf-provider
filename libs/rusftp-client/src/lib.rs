@@ -1,7 +1,4 @@
 mod client;
-mod decode;
-mod dummy;
-mod encode;
 mod error;
 mod message;
 

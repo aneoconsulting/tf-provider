@@ -1,9 +1,19 @@
-#[derive(Debug, Clone, Copy)]
-pub struct Error;
+#[derive(Debug)]
+pub enum Error {
+    NotEnoughData,
+    Unsupported,
+    InvalidChar,
+    Custom(String),
+}
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Sftp format error")
+        match self {
+            Error::NotEnoughData => f.write_str("Decode Error: Not enough data"),
+            Error::Unsupported => f.write_str("Decode Error: Unsupported"),
+            Error::InvalidChar => f.write_str("Decode Error: Invalid character"),
+            Error::Custom(msg) => write!(f, "Decode Error: {msg}"),
+        }
     }
 }
 
@@ -21,20 +31,20 @@ impl std::error::Error for Error {
     }
 }
 
-impl serde::ser::Error for Error {
-    fn custom<T>(_msg: T) -> Self
+impl serde::de::Error for Error {
+    fn custom<T>(msg: T) -> Self
     where
         T: std::fmt::Display,
     {
-        Self
+        Self::Custom(msg.to_string())
     }
 }
 
-impl serde::de::Error for Error {
-    fn custom<T>(_msg: T) -> Self
+impl serde::ser::Error for Error {
+    fn custom<T>(msg: T) -> Self
     where
         T: std::fmt::Display,
     {
-        Self
+        Self::Custom(msg.to_string())
     }
 }

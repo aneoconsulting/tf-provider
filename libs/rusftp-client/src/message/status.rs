@@ -4,12 +4,11 @@ SSH_FXP_STATUS: 101
  */
 
 use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 
-use crate::decode::SftpDecode;
-use crate::encode::SftpEncode;
-use crate::{Error, Message};
+use crate::Message;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 #[repr(u32)]
 #[non_exhaustive]
 pub enum StatusCode {
@@ -24,34 +23,11 @@ pub enum StatusCode {
     OpUnsupported = 8,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Status {
     pub code: u32,
     pub error: Bytes,
     pub language: Bytes,
-}
-
-impl SftpDecode for Status {
-    fn decode(buf: &mut dyn bytes::Buf) -> Result<Self, Error> {
-        let code = u32::decode(buf)?;
-        let error = Bytes::decode(buf)?;
-        let language = Bytes::decode(buf)?;
-        Ok(Status {
-            code,
-            error,
-            language,
-        })
-    }
-}
-
-impl SftpEncode for &Status {
-    fn encode(self, buf: &mut dyn bytes::BufMut) -> Result<(), Error> {
-        self.code.encode(buf)?;
-        self.error.encode(buf)?;
-        self.language.encode(buf)?;
-
-        Ok(())
-    }
 }
 
 impl StatusCode {

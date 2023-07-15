@@ -2,7 +2,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
-use rusftp_client::{Read, SftpClient, StatusCode};
+use rusftp_client::{Path, SftpClient, StatusCode};
 use russh::client::Handle;
 use tokio::io::AsyncRead;
 
@@ -21,11 +21,11 @@ impl SftpReader {
         let client = SftpClient::new(handle.channel_open_session().await?).await?;
 
         let handle = match client
-            .send(rusftp_client::Message::Open(rusftp_client::Open {
-                filename: filename.to_owned().into(),
+            .send(rusftp_client::Message::Open {
+                filename: Path(filename.to_owned().into()),
                 pflags: rusftp_client::PFlags::READ as u32,
                 attrs: Default::default(),
-            }))
+            })
             .await
         {
             rusftp_client::Message::Status(status) => {
@@ -39,7 +39,7 @@ impl SftpReader {
 
         Ok(SftpReader {
             client: Arc::new(client),
-            handle,
+            handle: rusftp_client::MessageHandle(handle),
             offset: 0,
             eof: false,
             request: None,
@@ -68,11 +68,11 @@ impl AsyncRead for SftpReader {
             let length = buf.remaining().min(32768) as u32; // read at most 32K
             self.request.get_or_insert(Box::pin(async move {
                 match client
-                    .send(rusftp_client::Message::Read(Read {
+                    .send(rusftp_client::Message::Read {
                         handle,
                         offset,
                         length,
-                    }))
+                    })
                     .await
                 {
                     rusftp_client::Message::Status(status) => {

@@ -18,9 +18,10 @@ SSH_FXP_ATTRS: 105
         NAM: 0x5000
  */
 
-use crate::decode::SftpDecode;
-use crate::encode::SftpEncode;
-use crate::Error;
+use serde::{ser::SerializeTuple, Deserialize, Serialize};
+use std::default::Default;
+
+use super::FileAttrs;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(u32)]
@@ -52,24 +53,16 @@ pub enum FilePermisions {
     NAM = 0x5000,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct FileOwner {
     pub uid: u32,
     pub gid: u32,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub struct FileTime {
     pub atime: u32,
     pub mtime: u32,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
-pub struct FileAttrs {
-    pub size: Option<u64>,
-    pub owner: Option<FileOwner>,
-    pub perms: Option<u32>,
-    pub time: Option<FileTime>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -82,34 +75,11 @@ enum AttrFlags {
     Time = 0x00000008,
 }
 
-impl SftpDecode for FileAttrs {
-    fn decode(buf: &mut dyn bytes::Buf) -> Result<Self, Error> {
-        let mut attrs = FileAttrs::default();
-        let attr_flags = u32::decode(buf)?;
-
-        if (attr_flags & AttrFlags::Size as u32) != 0 {
-            attrs.size = Some(u64::decode(buf)?);
-        }
-        if (attr_flags & AttrFlags::Owner as u32) != 0 {
-            let uid = u32::decode(buf)?;
-            let gid = u32::decode(buf)?;
-            attrs.owner = Some(FileOwner { uid, gid });
-        }
-        if (attr_flags & AttrFlags::Perms as u32) != 0 {
-            attrs.perms = Some(u32::decode(buf)?);
-        }
-        if (attr_flags & AttrFlags::Time as u32) != 0 {
-            let atime = u32::decode(buf)?;
-            let mtime = u32::decode(buf)?;
-            attrs.time = Some(FileTime { atime, mtime });
-        }
-
-        Ok(attrs)
-    }
-}
-
-impl SftpEncode for &FileAttrs {
-    fn encode(self, buf: &mut dyn bytes::BufMut) -> Result<(), Error> {
+impl Serialize for FileAttrs {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
         let mut attr_flags = 0u32;
 
         if self.size.is_some() {
@@ -125,23 +95,84 @@ impl SftpEncode for &FileAttrs {
             attr_flags |= AttrFlags::Time as u32;
         }
 
-        attr_flags.encode(buf)?;
+        let mut state = serializer.serialize_tuple(5)?;
 
-        if let Some(size) = self.size {
-            size.encode(buf)?;
-        }
-        if let Some(owner) = self.owner {
-            owner.uid.encode(buf)?;
-            owner.gid.encode(buf)?;
-        }
-        if let Some(perms) = self.perms {
-            perms.encode(buf)?;
-        }
-        if let Some(time) = self.time {
-            time.atime.encode(buf)?;
-            time.mtime.encode(buf)?;
+        state.serialize_element(&attr_flags)?;
+        state.serialize_element(&self.size)?;
+        state.serialize_element(&self.owner)?;
+        state.serialize_element(&self.perms)?;
+        state.serialize_element(&self.time)?;
+
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for FileAttrs {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = FileAttrs;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(
+                    formatter,
+                    "a flag, a size, an owner pair, a perm flag, and a time pair"
+                )
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut attrs = FileAttrs::default();
+                let attr_flags: u32 = seq
+                    .next_element()?
+                    .ok_or(serde::de::Error::missing_field("attr_flags"))?;
+
+                if (attr_flags & AttrFlags::Size as u32) != 0 {
+                    attrs.size = Some(
+                        seq.next_element()?
+                            .ok_or(serde::de::Error::missing_field("attr_size"))?,
+                    );
+                } else {
+                    seq.next_element()?
+                        .ok_or(serde::de::Error::missing_field("attr_size"))?;
+                }
+                if (attr_flags & AttrFlags::Owner as u32) != 0 {
+                    attrs.owner = Some(
+                        seq.next_element()?
+                            .ok_or(serde::de::Error::missing_field("attr_owner"))?,
+                    );
+                } else {
+                    seq.next_element()?
+                        .ok_or(serde::de::Error::missing_field("attr_owner"))?;
+                }
+                if (attr_flags & AttrFlags::Perms as u32) != 0 {
+                    attrs.perms = Some(
+                        seq.next_element()?
+                            .ok_or(serde::de::Error::missing_field("attr_perms"))?,
+                    );
+                } else {
+                    seq.next_element()?
+                        .ok_or(serde::de::Error::missing_field("attr_perms"))?;
+                }
+                if (attr_flags & AttrFlags::Time as u32) != 0 {
+                    attrs.time = Some(
+                        seq.next_element()?
+                            .ok_or(serde::de::Error::missing_field("attr_time"))?,
+                    );
+                } else {
+                    seq.next_element()?
+                        .ok_or(serde::de::Error::missing_field("attr_time"))?;
+                }
+
+                Ok(attrs)
+            }
         }
 
-        Ok(())
+        deserializer.deserialize_tuple(5, Visitor)
     }
 }

@@ -11,6 +11,7 @@ struct EnumDescription {
     repr_type: Type,
     visibility: Visibility,
     variants: Vec<Ident>,
+    variant_types: Vec<Ident>,
     variant_fields: Vec<Fields>,
     variant_discriminants: Vec<Expr>,
     variant_attributes: Vec<HashMap<String, proc_macro2::TokenStream>>,
@@ -29,6 +30,7 @@ impl EnumDescription {
 
         let mut variants = Vec::with_capacity(e.variants.len());
         let mut variant_fields = Vec::with_capacity(e.variants.len());
+        let mut variant_types = Vec::with_capacity(e.variants.len());
         let mut variant_discriminants = Vec::with_capacity(e.variants.len());
         let mut variant_attributes = Vec::with_capacity(e.variants.len());
 
@@ -40,6 +42,7 @@ impl EnumDescription {
         } in e.variants
         {
             let attributes = attribute_maps(attrs);
+            variant_types.push(format_ident!("{}{}", name, ident));
             variants.push(ident);
             variant_fields.push(fields);
             variant_discriminants.push(discriminant.expect("").1);
@@ -52,6 +55,7 @@ impl EnumDescription {
             repr_type,
             visibility,
             variants,
+            variant_types,
             variant_fields,
             variant_discriminants,
             variant_attributes,
@@ -156,6 +160,7 @@ impl EnumDescription {
             repr_type,
             visibility,
             variants,
+            variant_types,
             variant_fields,
             variant_discriminants,
             variant_attributes,
@@ -183,26 +188,28 @@ impl EnumDescription {
                 Fields::Unit => Vec::new(),
             })
             .collect::<Vec<_>>();
+        let variant_field_names = &variant_field_names;
 
         let with_serde = enable_serde(attributes);
 
         let serde = if with_serde {
             let serialize_variant = variants
                 .iter()
+                .zip(variant_types)
                 .zip(variant_fields)
-                .zip(&variant_field_names)
+                .zip(variant_field_names)
                 .zip(variant_discriminants)
-                .map(|(((variant, fields), names), discriminant)| match fields {
+                .map(|((((variant, variant_type), fields), names), discriminant)| match fields {
                     Fields::Named(_) => quote!(
                         Self::#variant { #(#names,)* } => {
                             let discriminant : #repr_type = #discriminant;
-                            let variant = ::std::mem::ManuallyDrop::new(#variant {
+                            let variant = ::std::mem::ManuallyDrop::new(#variant_type {
                                 #(
                                     #names: unsafe {
                                         let mut value = ::std::mem::MaybeUninit::uninit();
                                         ::std::ptr::copy(#names as *const _, value.as_mut_ptr(), 1);
                                         value.assume_init()
-                                    }
+                                    },
                                 )*
                             });
                             ::serde::ser::SerializeTuple::serialize_element(&mut state, &discriminant)?;
@@ -212,7 +219,7 @@ impl EnumDescription {
                     Fields::Unnamed(_) => quote!(
                         Self::#variant ( #(#names,)* ) => {
                             let discriminant : #repr_type = #discriminant;
-                            let variant = ::std::mem::ManuallyDrop::new(#variant (
+                            let variant = ::std::mem::ManuallyDrop::new(#variant_type (
                                 #(
                                     unsafe {
                                         let mut value = ::std::mem::MaybeUninit::uninit();
@@ -229,7 +236,7 @@ impl EnumDescription {
                         Self::#variant => {
                             let discriminant : #repr_type = #discriminant;
                             ::serde::ser::SerializeTuple::serialize_element(&mut state, &discriminant)?;
-                            ::serde::ser::SerializeTuple::serialize_element(&mut state, &#variant)?;
+                            ::serde::ser::SerializeTuple::serialize_element(&mut state, &#variant_type)?;
                         }
                     ),
                 })
@@ -270,7 +277,7 @@ impl EnumDescription {
                                 match seq.next_element::<u8>()? {
                                     #(
                                         Some(#variant_discriminants) => Ok(
-                                            seq.next_element::<#variants>()?.ok_or(no_value)?.into()
+                                            seq.next_element::<#variant_types>()?.ok_or(no_value)?.into()
                                         ),
                                     )*
                                     _ => Err(::serde::de::Error::custom("no discriminant found")),
@@ -290,10 +297,11 @@ impl EnumDescription {
 
         let variant_impl = variants
             .iter()
+            .zip(variant_types)
             .zip(variant_fields)
             .zip(variant_field_names)
             .zip(variant_attributes)
-            .map(|(((variant, fields), names), attributes)| {
+            .map(|((((variant, variant_type), fields), names), attributes)| {
                 let serde = if enable_serde(attributes) {
                     quote!(::serde::Serialize, ::serde::Deserialize,)
                 } else {
@@ -306,22 +314,30 @@ impl EnumDescription {
                         brace_token: _,
                         named: fields,
                     }) => {
+                        let fields = fields
+                            .iter()
+                            .map(|field| {
+                                let name = field.ident.as_ref().unwrap();
+                                let ty = &field.ty;
+                                quote!(#visibility #name: #ty)
+                            })
+                            .collect::<Vec<_>>();
                         quote!(
                             #[derive(#serde #derives)]
-                            #visibility struct #variant { #fields }
+                            #visibility struct #variant_type { #( #fields, )* }
 
-                            impl From<#variant> for #name {
-                                fn from(value: #variant) -> Self {
-                                    let #variant {#(#names,)*} = value;
+                            impl From<#variant_type> for #name {
+                                fn from(value: #variant_type) -> Self {
+                                    let #variant_type {#(#names,)*} = value;
                                     Self::#variant {#(#names,)*}
                                 }
                             }
 
-                            impl TryFrom<#name> for #variant {
+                            impl TryFrom<#name> for #variant_type {
                                 type Error = ();
                                 fn try_from(value: #name) -> Result<Self, Self::Error> {
                                     if let #name::#variant {#(#names,)*} = value {
-                                        Ok(#variant {#(#names,)*})
+                                        Ok(#variant_type {#(#names,)*})
                                     } else {
                                         Err(())
                                     }
@@ -333,22 +349,29 @@ impl EnumDescription {
                         paren_token: _,
                         unnamed: fields,
                     }) => {
+                        let fields = fields
+                            .iter()
+                            .map(|field| {
+                                let ty = &field.ty;
+                                quote!(#visibility #ty)
+                            })
+                            .collect::<Vec<_>>();
                         quote!(
                             #[derive(#serde #derives)]
-                            #visibility struct #variant (#fields);
+                            #visibility struct #variant_type (#(#fields,)*);
 
-                            impl From<#variant> for #name {
-                                fn from(value: #variant) -> Self {
-                                    let #variant (#(#names,)*) = value;
+                            impl From<#variant_type> for #name {
+                                fn from(value: #variant_type) -> Self {
+                                    let #variant_type (#(#names,)*) = value;
                                     Self::#variant (#(#names,)*)
                                 }
                             }
 
-                            impl TryFrom<#name> for #variant {
+                            impl TryFrom<#name> for #variant_type {
                                 type Error = ();
                                 fn try_from(value: #name) -> Result<Self, Self::Error> {
                                     if let #name::#variant (#(#names,)*) = value {
-                                        Ok(#variant (#(#names,)*))
+                                        Ok(#variant_type (#(#names,)*))
                                     } else {
                                         Err(())
                                     }
@@ -358,19 +381,19 @@ impl EnumDescription {
                     }
                     Fields::Unit => quote!(
                         #[derive(#serde #derives)]
-                        #visibility struct #variant;
+                        #visibility struct #variant_type;
 
-                        impl From<#variant> for #name {
-                            fn from(_value: #variant) -> Self {
+                        impl From<#variant_type> for #name {
+                            fn from(_value: #variant_type) -> Self {
                                 Self::#variant
                             }
                         }
 
-                        impl TryFrom<#name> for #variant {
+                        impl TryFrom<#name> for #variant_type {
                             type Error = ();
                             fn try_from(value: #name) -> Result<Self, Self::Error> {
                                 if let #name::#variant = value {
-                                    Ok(#variant)
+                                    Ok(#variant_type)
                                 } else {
                                     Err(())
                                 }

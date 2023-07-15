@@ -1,232 +1,181 @@
-use bytes::{Buf, Bytes};
+use std::default::Default;
 
-use crate::decode::SftpDecode;
-use crate::encode::SftpEncode;
+use bytes::{Buf, BufMut, Bytes};
+use rusftp_macro::TaggedEnum;
+use serde::{Deserialize, Serialize};
+
 use crate::Error;
 
 mod attrs;
-mod data;
 mod extended_reply;
 mod extended_request;
-mod handle;
-mod name;
-mod open;
-mod path;
-mod read;
-mod rename;
 mod status;
-mod symlink;
 mod version;
-mod write;
 
 pub mod decoder;
 pub mod encoder;
 
-pub use attrs::{FileAttrs, FileOwner, FilePermisions, FileTime};
-pub use data::Data;
+pub use attrs::{FileOwner, FilePermisions, FileTime};
+use decoder::SftpDecoder;
+use encoder::SftpEncoder;
 pub use extended_reply::ExtendedReply;
 pub use extended_request::ExtendedRequest;
-pub use handle::{Handle, HandleAttrs};
-pub use name::{Name, SingleName};
-pub use open::{Open, PFlags};
-pub use path::{Path, PathAttrs};
-pub use read::Read;
-pub use rename::Rename;
 pub use status::{Status, StatusCode};
-pub use symlink::Symlink;
 pub use version::Version;
-pub use write::Write;
 
-pub type Init = Version;
-pub type Close = Handle;
-pub type LStat = Path;
-pub type FStat = Handle;
-pub type SetStat = PathAttrs;
-pub type FSetStat = HandleAttrs;
-pub type OpenDir = Path;
-pub type ReadDir = Handle;
-pub type Remove = Path;
-pub type MkDir = PathAttrs;
-pub type RmDir = Path;
-pub type RealPath = Path;
-pub type Stat = Path;
-pub type ReadLink = Path;
+pub type Handle = MessageHandle;
+pub type FileAttrs = MessageAttrs;
+pub type Attrs = MessageAttrs;
+pub type Data = MessageData;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
+pub struct Path(pub Bytes);
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u32)]
+#[non_exhaustive]
+pub enum PFlags {
+    READ = 0x00000001,
+    WRITE = 0x00000002,
+    APPEND = 0x00000004,
+    CREATE = 0x00000008,
+    TRUNCATE = 0x00000010,
+    EXCLUDE = 0x00000020,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, TaggedEnum)]
+#[tagged_enum_derives(Debug, PartialEq, Eq, Clone)]
 #[repr(u8)]
 #[non_exhaustive]
 pub enum Message {
-    Init(Init) = 1,
+    Init(Version) = 1,
     Version(Version) = 2,
-    Open(Open) = 3,
-    Close(Close) = 4,
-    Read(Read) = 5,
-    Write(Write) = 6,
-    LStat(LStat) = 7,
-    FStat(FStat) = 8,
-    SetStat(SetStat) = 9,
-    FSetStat(FSetStat) = 10,
-    OpenDir(OpenDir) = 11,
-    ReadDir(ReadDir) = 12,
-    Remove(Remove) = 13,
-    MkDir(MkDir) = 14,
-    RmDir(RmDir) = 15,
-    RealPath(RealPath) = 16,
-    Stat(Stat) = 17,
-    Rename(Rename) = 18,
-    ReadLink(ReadLink) = 19,
-    Symlink(Symlink) = 20,
+    Open {
+        filename: Path,
+        pflags: u32,
+        attrs: Attrs,
+    } = 3,
+    Close {
+        handle: Handle,
+    } = 4,
+    Read {
+        handle: Handle,
+        offset: u64,
+        length: u32,
+    } = 5,
+    Write {
+        handle: Handle,
+        offset: u64,
+        data: Data,
+    } = 6,
+    LStat {
+        path: Path,
+    } = 7,
+    FStat {
+        handle: Handle,
+    } = 8,
+    SetStat {
+        path: Path,
+        attrs: Attrs,
+    } = 9,
+    FSetStat {
+        handle: Handle,
+        attrs: Attrs,
+    } = 10,
+    OpenDir {
+        path: Path,
+    } = 11,
+    ReadDir {
+        handle: Handle,
+    } = 12,
+    Remove {
+        path: Path,
+    } = 13,
+    MkDir {
+        path: Path,
+        attrs: Attrs,
+    } = 14,
+    RmDir {
+        path: Path,
+    } = 15,
+    RealPath {
+        path: Path,
+    } = 16,
+    Stat {
+        path: Path,
+    } = 17,
+    Rename {
+        old_path: Path,
+        new_path: Path,
+    } = 18,
+    ReadLink {
+        path: Path,
+    } = 19,
+    Symlink {
+        link_path: Path,
+        target_path: Path,
+    } = 20,
 
     Status(Status) = 101,
-    Handle(Handle) = 102,
-    Data(Data) = 103,
-    Name(Name) = 104,
-    Attrs(FileAttrs) = 105,
+    Handle(Bytes) = 102,
+    Data(Bytes) = 103,
+    Name {
+        filename: Path,
+        long_name: Path,
+        attrs: Attrs,
+    } = 104,
+
+    #[tagged_enum_serde(off)]
+    #[tagged_enum_derives(Debug, PartialEq, Eq, Clone, Copy, Default)]
+    Attrs {
+        size: Option<u64>,
+        owner: Option<FileOwner>,
+        perms: Option<u32>,
+        time: Option<FileTime>,
+    } = 105,
 
     Extended(ExtendedRequest) = 200,
     ExtendedReply(ExtendedReply) = 201,
 }
 
 impl Message {
-    fn kind(&self) -> u8 {
-        match self {
-            Self::Init(_) => 1,
-            Self::Version(_) => 2,
-            Self::Open(_) => 3,
-            Self::Close(_) => 4,
-            Self::Read(_) => 5,
-            Self::Write(_) => 6,
-            Self::LStat(_) => 7,
-            Self::FStat(_) => 8,
-            Self::SetStat(_) => 9,
-            Self::FSetStat(_) => 10,
-            Self::OpenDir(_) => 11,
-            Self::ReadDir(_) => 12,
-            Self::Remove(_) => 13,
-            Self::MkDir(_) => 14,
-            Self::RmDir(_) => 15,
-            Self::RealPath(_) => 16,
-            Self::Stat(_) => 17,
-            Self::Rename(_) => 18,
-            Self::ReadLink(_) => 19,
-            Self::Symlink(_) => 20,
-            Self::Status(_) => 101,
-            Self::Handle(_) => 102,
-            Self::Data(_) => 103,
-            Self::Name(_) => 104,
-            Self::Attrs(_) => 105,
-            Self::Extended(_) => 200,
-            Self::ExtendedReply(_) => 201,
-        }
-    }
-
     pub fn encode(&self, id: u32) -> Result<Bytes, Error> {
-        let mut vec = Vec::with_capacity(16);
-
-        let buf = &mut vec;
+        let id = match self {
+            Message::Init(Version {
+                version,
+                extensions: _,
+            }) => *version,
+            Message::Version(Version {
+                version,
+                extensions: _,
+            }) => *version,
+            _ => id,
+        };
+        let mut encoder = SftpEncoder::new(Vec::with_capacity(16), id);
 
         // Reserve space for frame length
-        u32::encode(0, buf)?;
+        encoder.buf.put_u32(0);
 
-        // Type of the message
-        self.kind().encode(buf)?;
-
-        // ID of the message or the version of the protocol
-        match self {
-            Self::Init(inner) => inner.version.encode(buf)?,
-            Self::Version(inner) => inner.version.encode(buf)?,
-            _ => id.encode(buf)?,
-        }
-
-        // Encode the rest of the frame
-        match self {
-            Self::Init(inner) => inner.encode(buf)?,
-            Self::Version(inner) => inner.encode(buf)?,
-            Self::Open(inner) => inner.encode(buf)?,
-            Self::Close(inner) => inner.encode(buf)?,
-            Self::Read(inner) => inner.encode(buf)?,
-            Self::Write(inner) => inner.encode(buf)?,
-            Self::LStat(inner) => inner.encode(buf)?,
-            Self::FStat(inner) => inner.encode(buf)?,
-            Self::SetStat(inner) => inner.encode(buf)?,
-            Self::FSetStat(inner) => inner.encode(buf)?,
-            Self::OpenDir(inner) => inner.encode(buf)?,
-            Self::ReadDir(inner) => inner.encode(buf)?,
-            Self::Remove(inner) => inner.encode(buf)?,
-            Self::MkDir(inner) => inner.encode(buf)?,
-            Self::RmDir(inner) => inner.encode(buf)?,
-            Self::RealPath(inner) => inner.encode(buf)?,
-            Self::Stat(inner) => inner.encode(buf)?,
-            Self::Rename(inner) => inner.encode(buf)?,
-            Self::ReadLink(inner) => inner.encode(buf)?,
-            Self::Symlink(inner) => inner.encode(buf)?,
-            Self::Status(inner) => inner.encode(buf)?,
-            Self::Handle(inner) => inner.encode(buf)?,
-            Self::Data(inner) => inner.encode(buf)?,
-            Self::Name(inner) => inner.as_slice().encode(buf)?,
-            Self::Attrs(inner) => inner.encode(buf)?,
-            Self::Extended(inner) => inner.encode(buf)?,
-            Self::ExtendedReply(inner) => inner.encode(buf)?,
-        }
+        self.serialize(&mut encoder)?;
 
         // write frame length at the beginning of the frame
-        let frame_length = (vec.len() - 4) as u32;
-        let mut buf = vec.as_mut_slice();
-        frame_length.encode(&mut buf)?;
+        let frame_length = (encoder.buf.len() - std::mem::size_of::<u32>()) as u32;
+        let mut buf = encoder.buf.as_mut_slice();
+        buf.put_u32(frame_length);
 
-        Ok(vec.into())
+        Ok(encoder.buf.into())
     }
 
-    pub fn decode(buf: &mut dyn Buf) -> Result<(u32, Self), Error> {
-        let frame_length = u32::decode(buf)?;
+    pub fn decode(mut buf: &[u8]) -> Result<(u32, Self), Error> {
+        let frame_length = buf.get_u32() as usize;
 
         // Limit the read to this very frame
-        let mut buf = buf.take(frame_length as usize);
-        let buf = &mut buf;
+        let mut decoder = SftpDecoder::new(&buf[0..frame_length]);
 
-        // Type of the message
-        let kind = u8::decode(buf)?;
-        // ID of the message or version of the protocol
-        let id = u32::decode(buf)?;
+        let message = Message::deserialize(&mut decoder).map_err(Into::into)?;
+        let id = decoder.get_id().unwrap_or_default();
 
-        match kind {
-            1 => {
-                let mut init = Init::decode(buf)?;
-                init.version = id;
-                Ok((0, Self::Init(init)))
-            }
-            2 => {
-                let mut version = Version::decode(buf)?;
-                version.version = id;
-                Ok((0, Self::Version(version)))
-            }
-            3 => Ok((id, Self::Open(SftpDecode::decode(buf)?))),
-            4 => Ok((id, Self::Close(SftpDecode::decode(buf)?))),
-            5 => Ok((id, Self::Read(SftpDecode::decode(buf)?))),
-            6 => Ok((id, Self::Write(SftpDecode::decode(buf)?))),
-            7 => Ok((id, Self::LStat(SftpDecode::decode(buf)?))),
-            8 => Ok((id, Self::FStat(SftpDecode::decode(buf)?))),
-            9 => Ok((id, Self::SetStat(SftpDecode::decode(buf)?))),
-            10 => Ok((id, Self::FSetStat(SftpDecode::decode(buf)?))),
-            11 => Ok((id, Self::OpenDir(SftpDecode::decode(buf)?))),
-            12 => Ok((id, Self::ReadDir(SftpDecode::decode(buf)?))),
-            13 => Ok((id, Self::Remove(SftpDecode::decode(buf)?))),
-            14 => Ok((id, Self::MkDir(SftpDecode::decode(buf)?))),
-            15 => Ok((id, Self::RmDir(SftpDecode::decode(buf)?))),
-            16 => Ok((id, Self::RealPath(SftpDecode::decode(buf)?))),
-            17 => Ok((id, Self::Stat(SftpDecode::decode(buf)?))),
-            18 => Ok((id, Self::Rename(SftpDecode::decode(buf)?))),
-            19 => Ok((id, Self::ReadLink(SftpDecode::decode(buf)?))),
-            20 => Ok((id, Self::Symlink(SftpDecode::decode(buf)?))),
-            101 => Ok((id, Self::Status(SftpDecode::decode(buf)?))),
-            102 => Ok((id, Self::Handle(SftpDecode::decode(buf)?))),
-            103 => Ok((id, Self::Data(SftpDecode::decode(buf)?))),
-            104 => Ok((id, Self::Name(SftpDecode::decode(buf)?))),
-            105 => Ok((id, Self::Attrs(SftpDecode::decode(buf)?))),
-            200 => Ok((id, Self::Extended(SftpDecode::decode(buf)?))),
-            201 => Ok((id, Self::ExtendedReply(SftpDecode::decode(buf)?))),
-            _ => Err(Error),
-        }
+        Ok((id, message))
     }
 }
 
@@ -420,24 +369,3 @@ SSH_FXP_EXTENDED: 200
 SSH_FXP_EXTENDED_REPLY: 201
 | u32: id | u8[frame length - 5]: data |
  */
-
-macro_rules! strong_alias {
-    ($new:ident: $existing:ty) => {
-        #[derive(Debug, PartialEq, Eq, Clone)]
-        pub struct $new($existing);
-
-        impl crate::decode::SftpDecode for $new {
-            fn decode(buf: &mut dyn bytes::Buf) -> Result<Self, crate::Error> {
-                Ok($new(<$existing>::decode(buf)?))
-            }
-        }
-
-        impl crate::encode::SftpEncode for &$new {
-            fn encode(self, buf: &mut dyn bytes::BufMut) -> Result<(), crate::Error> {
-                self.0.encode(buf)
-            }
-        }
-    };
-}
-
-pub(self) use strong_alias;

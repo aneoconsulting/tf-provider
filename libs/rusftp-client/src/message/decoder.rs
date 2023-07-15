@@ -1,115 +1,152 @@
 use bytes::Buf;
 use serde::{
-    de::{self, IntoDeserializer},
+    de::{self, IntoDeserializer, SeqAccess},
     Deserializer,
 };
 
-#[derive(Debug)]
-pub enum Error {
-    NotEnoughData,
-    Unsupported,
-    InvalidChar,
-    Custom(String),
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::NotEnoughData => f.write_str("Decode Error: Not enough data"),
-            Error::Unsupported => f.write_str("Decode Error: Unsupported"),
-            Error::InvalidChar => f.write_str("Decode Error: Invalid character"),
-            Error::Custom(msg) => write!(f, "Decode Error: {msg}"),
-        }
-    }
-}
-
-impl std::error::Error for Error {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
-
-impl de::Error for Error {
-    fn custom<T>(msg: T) -> Self
-    where
-        T: std::fmt::Display,
-    {
-        Self::Custom(msg.to_string())
-    }
-}
+use crate::Error;
 
 pub struct SftpDecoder<'de> {
     pub(crate) buf: &'de [u8],
+    id: Option<u32>,
+    current_field: &'static str,
 }
 
 impl<'de> SftpDecoder<'de> {
-    fn decode_bool(&mut self) -> Result<bool, Error> {
-        if self.buf.remaining() < std::mem::size_of::<u8>() {
-            return Err(Error::NotEnoughData).unwrap();
+    pub fn new(buf: &'de [u8]) -> Self {
+        Self {
+            buf,
+            id: None,
+            current_field: "",
         }
-        Ok(self.buf.get_u8() != 0)
+    }
+    pub fn get_id(&self) -> Option<u32> {
+        self.id
+    }
+    fn decode_length(&self) -> bool {
+        !self.current_field.ends_with("_implicit_length")
+    }
+    fn skip_field(&self) -> Option<u32> {
+        if matches!(self.current_field, "id" | "version") {
+            self.id
+        } else {
+            None
+        }
+    }
+    fn decode_id(&mut self) -> Result<(), Error> {
+        if self.id.is_none() {
+            if self.buf.remaining() < std::mem::size_of::<u32>() {
+                return Err(Error::NotEnoughData);
+            }
+            self.id = Some(self.buf.get_u32());
+        }
+        Ok(())
+    }
+
+    fn decode_bool(&mut self) -> Result<bool, Error> {
+        if let Some(id) = self.skip_field() {
+            return Ok(id != 0);
+        }
+        if self.buf.remaining() < std::mem::size_of::<u8>() {
+            return Err(Error::NotEnoughData);
+        }
+        let value = self.buf.get_u8() != 0;
+        self.decode_id()?;
+        Ok(value)
     }
     fn decode_u8(&mut self) -> Result<u8, Error> {
-        if self.buf.remaining() < std::mem::size_of::<u8>() {
-            return Err(Error::NotEnoughData).unwrap();
+        if let Some(id) = self.skip_field() {
+            return Ok(id as u8);
         }
-        Ok(self.buf.get_u8())
+        if self.buf.remaining() < std::mem::size_of::<u8>() {
+            return Err(Error::NotEnoughData);
+        }
+        let value = self.buf.get_u8();
+        self.decode_id()?;
+        Ok(value)
     }
     fn decode_u16(&mut self) -> Result<u16, Error> {
-        if self.buf.remaining() < std::mem::size_of::<u16>() {
-            return Err(Error::NotEnoughData).unwrap();
+        if let Some(id) = self.skip_field() {
+            return Ok(id as u16);
         }
-        Ok(self.buf.get_u16())
+        if self.buf.remaining() < std::mem::size_of::<u16>() {
+            return Err(Error::NotEnoughData);
+        }
+        let value = self.buf.get_u16();
+        self.decode_id()?;
+        Ok(value)
     }
     fn decode_u32(&mut self) -> Result<u32, Error> {
-        if self.buf.remaining() < std::mem::size_of::<u32>() {
-            return Err(Error::NotEnoughData).unwrap();
+        if let Some(id) = self.skip_field() {
+            return Ok(id);
         }
-        Ok(self.buf.get_u32())
+        if self.buf.remaining() < std::mem::size_of::<u32>() {
+            return Err(Error::NotEnoughData);
+        }
+        let value = self.buf.get_u32();
+        self.decode_id()?;
+        Ok(value)
     }
     fn decode_u64(&mut self) -> Result<u64, Error> {
-        if self.buf.remaining() < std::mem::size_of::<u64>() {
-            return Err(Error::NotEnoughData).unwrap();
+        if let Some(id) = self.skip_field() {
+            return Ok(id as u64);
         }
-        Ok(self.buf.get_u64())
+        if self.buf.remaining() < std::mem::size_of::<u64>() {
+            return Err(Error::NotEnoughData);
+        }
+        let value = self.buf.get_u64();
+        self.decode_id()?;
+        Ok(value)
     }
     fn decode_u128(&mut self) -> Result<u128, Error> {
-        if self.buf.remaining() < std::mem::size_of::<u128>() {
-            return Err(Error::NotEnoughData).unwrap();
+        if let Some(id) = self.skip_field() {
+            return Ok(id as u128);
         }
-        Ok(self.buf.get_u128())
+        if self.buf.remaining() < std::mem::size_of::<u128>() {
+            return Err(Error::NotEnoughData);
+        }
+        let value = self.buf.get_u128();
+        self.decode_id()?;
+        Ok(value)
     }
     fn decode_f32(&mut self) -> Result<f32, Error> {
-        if self.buf.remaining() < std::mem::size_of::<f32>() {
-            return Err(Error::NotEnoughData).unwrap();
+        if let Some(id) = self.skip_field() {
+            return Ok(id as f32);
         }
-        Ok(self.buf.get_f32())
+        if self.buf.remaining() < std::mem::size_of::<f32>() {
+            return Err(Error::NotEnoughData);
+        }
+        let value = self.buf.get_f32();
+        self.decode_id()?;
+        Ok(value)
     }
     fn decode_f64(&mut self) -> Result<f64, Error> {
-        if self.buf.remaining() < std::mem::size_of::<f64>() {
-            return Err(Error::NotEnoughData).unwrap();
+        if let Some(id) = self.skip_field() {
+            return Ok(id as f64);
         }
-        Ok(self.buf.get_f64())
+        if self.buf.remaining() < std::mem::size_of::<f64>() {
+            return Err(Error::NotEnoughData);
+        }
+        let value = self.buf.get_f64();
+        self.decode_id()?;
+        Ok(value)
     }
     fn decode_bytes(&mut self) -> Result<&'de [u8], Error> {
-        let len = self.decode_u32()? as usize;
-        if self.buf.remaining() < len {
-            return Err(Error::NotEnoughData).unwrap();
-        }
-        Ok(&self.buf[0..len])
+        let len = if self.decode_length() {
+            self.decode_u32()? as usize
+        } else {
+            self.buf.remaining()
+        };
+        let Some(bytes) = self.buf.get(0..len) else {
+            return Err(Error::NotEnoughData);
+        };
+        self.buf.advance(len);
+        Ok(bytes)
     }
     fn decode_str(&mut self) -> Result<&'de str, Error> {
         match std::str::from_utf8(self.decode_bytes()?) {
             Ok(s) => Ok(s),
-            Err(_) => Err(Error::InvalidChar).unwrap(),
+            Err(_) => Err(Error::InvalidChar),
         }
     }
 }
@@ -281,12 +318,13 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut SftpDecoder<'de> {
 
     fn deserialize_newtype_struct<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
+        self.current_field = name;
         visitor.visit_newtype_struct(self)
     }
 
@@ -294,29 +332,41 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut SftpDecoder<'de> {
     where
         V: de::Visitor<'de>,
     {
-        let nel = self.decode_u32()? as usize;
-        self.deserialize_tuple(nel, visitor)
+        let nel = if self.decode_length() {
+            Some(self.decode_u32()? as usize)
+        } else {
+            None
+        };
+        self.current_field = "";
+        visitor.visit_seq(SftpDecoderSeq {
+            decoder: self,
+            fields: &[],
+            nel,
+        })
     }
 
     fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
+        self.current_field = "";
         visitor.visit_seq(SftpDecoderSeq {
             decoder: self,
-            nel: len,
+            fields: &[],
+            nel: Some(len),
         })
     }
 
     fn deserialize_tuple_struct<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         len: usize,
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
+        self.current_field = name;
         self.deserialize_tuple(len, visitor)
     }
 
@@ -324,32 +374,50 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut SftpDecoder<'de> {
     where
         V: de::Visitor<'de>,
     {
-        let nel = self.decode_u32()? as usize;
-        visitor.visit_map(SftpDecoderSeq { decoder: self, nel })
+        let nel = if self.decode_length() {
+            Some(self.decode_u32()? as usize)
+        } else {
+            None
+        };
+        self.current_field = "";
+        visitor.visit_map(SftpDecoderSeq {
+            decoder: self,
+            fields: &[],
+            nel,
+        })
     }
 
     fn deserialize_struct<V>(
         self,
-        _name: &'static str,
+        name: &'static str,
         fields: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        self.deserialize_tuple(fields.len(), visitor)
+        self.current_field = name;
+        visitor.visit_seq(SftpDecoderSeq {
+            decoder: self,
+            fields,
+            nel: Some(fields.len()),
+        })
     }
 
     fn deserialize_enum<V>(
         self,
-        _name: &'static str,
-        _variants: &'static [&'static str],
+        name: &'static str,
+        variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        visitor.visit_enum(self)
+        self.current_field = name;
+        visitor.visit_enum(SftpDecoderEnum {
+            decoder: self,
+            variants,
+        })
     }
 
     fn deserialize_identifier<V>(self, _visitor: V) -> Result<V::Value, Self::Error>
@@ -373,7 +441,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut SftpDecoder<'de> {
 
 pub struct SftpDecoderSeq<'a, 'de> {
     decoder: &'a mut SftpDecoder<'de>,
-    nel: usize,
+    fields: &'static [&'static str],
+    nel: Option<usize>,
 }
 
 impl<'a, 'de> de::SeqAccess<'de> for SftpDecoderSeq<'a, 'de> {
@@ -383,16 +452,30 @@ impl<'a, 'de> de::SeqAccess<'de> for SftpDecoderSeq<'a, 'de> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        if self.nel == 0 {
-            return Ok(None);
+        match self.fields {
+            [] => self.decoder.current_field = "",
+            [field, fields @ ..] => {
+                self.decoder.current_field = field;
+                self.fields = fields;
+            }
         }
-
-        self.nel -= 1;
-        Ok(Some(seed.deserialize(&mut *self.decoder)?))
+        eprintln!("current field: {}", self.decoder.current_field);
+        match self.nel {
+            Some(0) => Ok(None),
+            Some(nel) => {
+                self.nel = Some(nel - 1);
+                Ok(Some(seed.deserialize(&mut *self.decoder)?))
+            }
+            None => match seed.deserialize(&mut *self.decoder) {
+                Ok(value) => Ok(Some(value)),
+                Err(Error::NotEnoughData) => Ok(None),
+                Err(err) => Err(err),
+            },
+        }
     }
 
     fn size_hint(&self) -> Option<usize> {
-        Some(self.nel)
+        self.nel
     }
 }
 impl<'a, 'de> de::MapAccess<'de> for SftpDecoderSeq<'a, 'de> {
@@ -402,12 +485,7 @@ impl<'a, 'de> de::MapAccess<'de> for SftpDecoderSeq<'a, 'de> {
     where
         K: de::DeserializeSeed<'de>,
     {
-        if self.nel == 0 {
-            return Ok(None);
-        }
-
-        self.nel -= 1;
-        Ok(Some(seed.deserialize(&mut *self.decoder)?))
+        self.next_element_seed(seed)
     }
 
     fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
@@ -418,23 +496,38 @@ impl<'a, 'de> de::MapAccess<'de> for SftpDecoderSeq<'a, 'de> {
     }
 
     fn size_hint(&self) -> Option<usize> {
-        Some(self.nel)
+        self.nel
     }
 }
 
-impl<'a, 'de> de::EnumAccess<'de> for &'a mut SftpDecoder<'de> {
+pub struct SftpDecoderEnum<'a, 'de> {
+    decoder: &'a mut SftpDecoder<'de>,
+    variants: &'static [&'static str],
+}
+pub struct SftpDecoderVariant<'a, 'de> {
+    decoder: &'a mut SftpDecoder<'de>,
+    variant: &'static str,
+}
+
+impl<'a, 'de> de::EnumAccess<'de> for SftpDecoderEnum<'a, 'de> {
     type Error = Error;
-    type Variant = Self;
+    type Variant = SftpDecoderVariant<'a, 'de>;
 
     fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
     where
         V: de::DeserializeSeed<'de>,
     {
-        let variant = self.decode_u32()?;
-        Ok((seed.deserialize(variant.into_deserializer())?, self))
+        let variant = self.decoder.decode_u32()?;
+        Ok((
+            seed.deserialize(variant.into_deserializer())?,
+            SftpDecoderVariant {
+                decoder: self.decoder,
+                variant: self.variants.get(variant as usize).unwrap_or(&""),
+            },
+        ))
     }
 }
-impl<'a, 'de> de::VariantAccess<'de> for &'a mut SftpDecoder<'de> {
+impl<'a, 'de> de::VariantAccess<'de> for SftpDecoderVariant<'a, 'de> {
     type Error = Error;
 
     fn unit_variant(self) -> Result<(), Self::Error> {
@@ -445,14 +538,16 @@ impl<'a, 'de> de::VariantAccess<'de> for &'a mut SftpDecoder<'de> {
     where
         T: de::DeserializeSeed<'de>,
     {
-        seed.deserialize(self)
+        self.decoder.current_field = self.variant;
+        seed.deserialize(self.decoder)
     }
 
     fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
     where
         V: de::Visitor<'de>,
     {
-        self.deserialize_tuple(len, visitor)
+        self.decoder.current_field = self.variant;
+        self.decoder.deserialize_tuple(len, visitor)
     }
 
     fn struct_variant<V>(
@@ -463,6 +558,7 @@ impl<'a, 'de> de::VariantAccess<'de> for &'a mut SftpDecoder<'de> {
     where
         V: de::Visitor<'de>,
     {
-        self.deserialize_tuple(fields.len(), visitor)
+        self.decoder.current_field = self.variant;
+        self.decoder.deserialize_tuple(fields.len(), visitor)
     }
 }

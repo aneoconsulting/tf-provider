@@ -6,7 +6,6 @@ use russh::Channel;
 use russh::ChannelMsg;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::Init;
 use crate::Message;
 use crate::StatusCode;
 use crate::Version;
@@ -17,7 +16,6 @@ pub struct SftpClient {
 
 impl SftpClient {
     pub async fn new(mut channel: Channel<Msg>) -> Result<Self, std::io::Error> {
-        super::dummy::test();
         // Start SFTP subsystem
         match channel.request_subsystem(false, "sftp").await {
             Ok(_) => (),
@@ -30,7 +28,7 @@ impl SftpClient {
         }
 
         // Init SFTP handshake
-        let init_message = Message::Init(Init {
+        let init_message = Message::Init(Version {
             version: 3,
             extensions: Default::default(),
         });
@@ -48,8 +46,7 @@ impl SftpClient {
         // Check handshake response
         match channel.wait().await {
             Some(ChannelMsg::Data { data }) => {
-                let mut buf = data.as_ref();
-                match Message::decode(&mut buf) {
+                match Message::decode(data.as_ref()) {
                     // Valid response: continue
                     Ok((
                         _,
@@ -128,8 +125,7 @@ impl SftpClient {
                             break;
                         };
 
-                        let mut buf = data.as_ref();
-                        match Message::decode(&mut buf) {
+                        match Message::decode(data.as_ref()) {
                             Ok((id, message)) => {
                                 //eprintln!("Response #{id}: {message:?}");
                                 if let Some(tx) = onflight.remove(&id) {
