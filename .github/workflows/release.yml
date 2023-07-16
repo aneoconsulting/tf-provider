@@ -1,0 +1,32 @@
+on:
+  release:
+    types: [released]
+
+name: Release
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          target: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2.2.1
+      - uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          command: build
+          args: --target x86_64-unknown-linux-musl --release
+      - run: zip terraform-provider-cmd_0.1.0_linux_amd64.zip terraform-provider-cmd
+        working-directory: ./target/x86_64-unknown-linux-musl/release/
+      - name: Upload Release Asset
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ github.event.release.tag_name }} terraform-provider-cmd_0.1.0_linux_amd64.zip || true
+        working-directory: ./target/x86_64-unknown-linux-musl/release/
