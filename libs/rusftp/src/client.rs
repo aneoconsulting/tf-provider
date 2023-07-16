@@ -54,9 +54,9 @@ impl SftpClient {
             version: 3,
             extensions: Default::default(),
         });
-        let init_frame = init_message.encode(0).map_err(|_| {
-            std::io::Error::new(std::io::ErrorKind::InvalidData, "Could not initialize SFTP")
-        })?;
+        let init_frame = init_message
+            .encode(0)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidData, err))?;
         channel.data(init_frame.as_ref()).await.map_err(|e| {
             if let russh::Error::IO(io_err) = e {
                 io_err
@@ -91,11 +91,8 @@ impl SftpClient {
                             "Bad SFTP init",
                         ));
                     }
-                    Err(_) => {
-                        return Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Could not encode SFTP init",
-                        ));
+                    Err(err) => {
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, err));
                     }
                 }
             }
@@ -132,10 +129,8 @@ impl SftpClient {
                                     onflight.insert(id, tx);
                                 }
                             }
-                            Err(_) => {
-                                _ = tx.send(
-                                    message::StatusCode::BadMessage.to_message("Could not encode message".into()),
-                                );
+                            Err(err) => {
+                                _ = tx.send(err.into());
                             }
                         }
                     },
@@ -156,8 +151,8 @@ impl SftpClient {
                                     eprintln!("SFTP Error: Received a reply with an invalid id");
                                 }
                             }
-                            Err(_) => {
-                                eprintln!("SFTP Error: Could not decode server frame");
+                            Err(err) => {
+                                eprintln!("SFTP Error: Could not decode server frame: {err}");
                             }
                         }
                     },

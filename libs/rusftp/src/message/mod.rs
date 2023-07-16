@@ -3,6 +3,8 @@ use std::borrow::Cow;
 use bytes::{Buf, BufMut, Bytes};
 use serde::{ser::SerializeTuple, Deserialize, Serialize};
 
+use crate::decoder::SftpDecoder;
+use crate::encoder::SftpEncoder;
 use crate::Error;
 
 mod attrs;
@@ -33,12 +35,6 @@ mod status;
 mod symlink;
 mod version;
 mod write;
-
-pub mod decoder;
-pub mod encoder;
-
-use decoder::SftpDecoder;
-use encoder::SftpEncoder;
 
 pub use attrs::{Attrs, Owner, Permisions, Time};
 pub use close::Close;
@@ -334,12 +330,8 @@ impl Message {
 }
 
 impl From<Error> for Message {
-    fn from(_: Error) -> Self {
-        Message::Status(Status {
-            code: StatusCode::BadMessage as u32,
-            error: "Bad Message".into(),
-            language: "en".into(),
-        })
+    fn from(value: Error) -> Self {
+        Self::Status(value.into())
     }
 }
 

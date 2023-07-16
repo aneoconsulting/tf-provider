@@ -168,6 +168,16 @@ impl From<russh::Error> for Status {
     }
 }
 
+impl From<crate::Error> for Status {
+    fn from(error: crate::Error) -> Self {
+        Self {
+            code: StatusCode::BadMessage as u32,
+            error: error.to_string().into(),
+            language: "en".into(),
+        }
+    }
+}
+
 impl From<Status> for std::io::Error {
     fn from(value: Status) -> Self {
         let kind = match StatusCode::try_from(value.code) {
