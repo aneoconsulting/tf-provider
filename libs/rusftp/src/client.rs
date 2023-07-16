@@ -6,13 +6,34 @@ use russh::Channel;
 use russh::ChannelMsg;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::Init;
-use crate::Message;
-use crate::StatusCode;
-use crate::Version;
+use crate::{message, Message};
 
 pub struct SftpClient {
     commands: mpsc::UnboundedSender<(Message, oneshot::Sender<Message>)>,
+}
+
+macro_rules! command {
+    ($name:ident: $input:ident) => {
+        pub async fn $name(&self, request: message::$input) -> Result<(), message::Status> {
+            let response = self.send(request.into()).await;
+            match response {
+                Message::Status(status) => status.to_result(()),
+                _ => Err(message::StatusCode::BadMessage
+                    .to_status("Expected a status".into())),
+            }
+        }
+    };
+    ($name:ident: $input:ident -> $output:ident) => {
+        pub async fn $name(&self, request: message::$input) -> Result<message::$output, message::Status> {
+            let response = self.send(request.into()).await;
+            match response {
+                Message::$output(response) => Ok(response),
+                Message::Status(status) => Err(status),
+                _ => Err(message::StatusCode::BadMessage
+                    .to_status(std::stringify!(Expected a $output or a status).into())),
+            }
+        }
+    };
 }
 
 impl SftpClient {
@@ -29,7 +50,7 @@ impl SftpClient {
         }
 
         // Init SFTP handshake
-        let init_message = Message::Init(Init {
+        let init_message = Message::Init(message::Init {
             version: 3,
             extensions: Default::default(),
         });
@@ -51,7 +72,7 @@ impl SftpClient {
                     // Valid response: continue
                     Ok((
                         _,
-                        Message::Version(Version {
+                        Message::Version(message::Version {
                             version: 3,
                             extensions: _,
                         }),
@@ -113,7 +134,7 @@ impl SftpClient {
                             }
                             Err(_) => {
                                 _ = tx.send(
-                                    StatusCode::BadMessage.to_message("Could not encode message".into()),
+                                    message::StatusCode::BadMessage.to_message("Could not encode message".into()),
                                 );
                             }
                         }
@@ -151,15 +172,35 @@ impl SftpClient {
         let (tx, rx) = oneshot::channel();
 
         if self.commands.send((request, tx)).is_err() {
-            StatusCode::Failure.to_message("Could not send request to SFTP client".into())
+            message::StatusCode::Failure.to_message("Could not send request to SFTP client".into())
         } else {
             rx.await.unwrap_or(
-                StatusCode::Failure.to_message("Could not get reply from SFTP client".into()),
+                message::StatusCode::Failure
+                    .to_message("Could not get reply from SFTP client".into()),
             )
         }
     }
 
-    pub fn close(&self) -> impl Future<Output = ()> + '_ {
+    pub fn stop(&self) -> impl Future<Output = ()> + '_ {
         self.commands.closed()
     }
+
+    command!(open: Open -> Handle);
+    command!(close: Close);
+    command!(read: Read -> Data);
+    command!(write: Write);
+    command!(lstat: LStat -> Attrs);
+    command!(fstat: FStat -> Attrs);
+    command!(setstat: SetStat);
+    command!(fsetstat: FSetStat);
+    command!(opendir: OpenDir -> Handle);
+    command!(readdir: ReadDir -> Name);
+    command!(remove: Remove);
+    command!(mkdir: MkDir);
+    command!(rmdir: RmDir);
+    command!(realpath: RealPath -> Name);
+    command!(stat: Stat -> Attrs);
+    command!(rename: Rename);
+    command!(readlink: ReadLink -> Name);
+    command!(symlink: Symlink);
 }

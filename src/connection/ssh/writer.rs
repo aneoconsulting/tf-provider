@@ -190,7 +190,7 @@ impl AsyncWrite for SftpWriter {
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::result::Result<(), std::io::Error>> {
-        let close = self.client.close();
+        let close = self.client.stop();
         tokio::pin!(close);
         close.poll(cx).map(|_| Ok(()))
     }

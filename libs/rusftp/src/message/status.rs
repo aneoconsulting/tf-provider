@@ -25,6 +25,23 @@ pub struct Status {
     pub language: Bytes,
 }
 
+impl Status {
+    pub fn is_ok(&self) -> bool {
+        self.code == StatusCode::Ok as u32
+    }
+    pub fn is_err(&self) -> bool {
+        self.code != StatusCode::Ok as u32
+    }
+
+    pub fn to_result<T>(self, value: T) -> Result<T, Self> {
+        if self.is_ok() {
+            Ok(value)
+        } else {
+            Err(self)
+        }
+    }
+}
+
 impl StatusCode {
     pub fn to_status(self, msg: Bytes) -> Status {
         let msg = if msg.is_empty() {
