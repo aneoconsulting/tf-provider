@@ -170,7 +170,7 @@ where
         let reader = match self.connect.read(connect_config, path).await {
             Ok(reader) => reader,
             Err(err) => {
-                diags.root_error("Could not read file", err.to_string());
+                diags.root_error("Could not read file", format!("{err}"));
                 return None;
             }
         };

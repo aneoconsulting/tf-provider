@@ -1,229 +1,335 @@
-use bytes::{Buf, Bytes};
+use std::borrow::Cow;
 
-use crate::decode::SftpDecode;
-use crate::encode::SftpEncode;
+use bytes::{Buf, BufMut, Bytes};
+use serde::{ser::SerializeTuple, Deserialize, Serialize};
+
 use crate::Error;
 
 mod attrs;
+mod close;
 mod data;
+mod extended;
 mod extended_reply;
-mod extended_request;
+mod fsetstat;
+mod fstat;
 mod handle;
+mod init;
+mod lstat;
+mod mkdir;
 mod name;
 mod open;
+mod opendir;
 mod path;
 mod read;
+mod readdir;
+mod readlink;
+mod realpath;
+mod remove;
 mod rename;
+mod rmdir;
+mod setstat;
+mod stat;
 mod status;
 mod symlink;
 mod version;
 mod write;
 
-pub use attrs::{FileAttrs, FileOwner, FilePermisions, FileTime};
+pub mod decoder;
+pub mod encoder;
+
+use decoder::SftpDecoder;
+use encoder::SftpEncoder;
+
+pub use attrs::{Attrs, Owner, Permisions, Time};
+pub use close::Close;
 pub use data::Data;
+pub use extended::Extended;
 pub use extended_reply::ExtendedReply;
-pub use extended_request::ExtendedRequest;
-pub use handle::{Handle, HandleAttrs};
-pub use name::{Name, SingleName};
-pub use open::{Open, PFlags};
-pub use path::{Path, PathAttrs};
+pub use fsetstat::FSetStat;
+pub use fstat::FStat;
+pub use handle::Handle;
+pub use init::Init;
+pub use lstat::LStat;
+pub use mkdir::MkDir;
+pub use name::Name;
+pub use open::{pflags, Open};
+pub use opendir::OpenDir;
+pub use path::Path;
 pub use read::Read;
+pub use readdir::ReadDir;
+pub use readlink::ReadLink;
+pub use realpath::RealPath;
+pub use remove::Remove;
 pub use rename::Rename;
+pub use rmdir::RmDir;
+pub use setstat::SetStat;
+pub use stat::Stat;
 pub use status::{Status, StatusCode};
 pub use symlink::Symlink;
 pub use version::Version;
 pub use write::Write;
 
-pub type Init = Version;
-pub type Close = Handle;
-pub type LStat = Path;
-pub type FStat = Handle;
-pub type SetStat = PathAttrs;
-pub type FSetStat = HandleAttrs;
-pub type OpenDir = Path;
-pub type ReadDir = Handle;
-pub type Remove = Path;
-pub type MkDir = PathAttrs;
-pub type RmDir = Path;
-pub type RealPath = Path;
-pub type Stat = Path;
-pub type ReadLink = Path;
+macro_rules! messages {
+    ($($name:ident: $discriminant:expr)*) => {
+        #[derive(Debug, PartialEq, Eq, Clone)]
+        #[repr(u8)]
+        #[non_exhaustive]
+        pub enum Message {
+            $($name($name) = $discriminant,)*
+        }
+
+        #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+        #[repr(u8)]
+        #[non_exhaustive]
+        pub enum MessageKind {
+            $($name = $discriminant,)*
+        }
+
+        impl Message {
+            pub fn kind(&self) -> MessageKind {
+                match self {
+                    $(Self::$name(_) => MessageKind::$name,)*
+                }
+            }
+        }
+
+        impl MessageKind {
+            pub fn code(&self) -> u8 {
+                match self {
+                    $(Self::$name => $discriminant,)*
+                }
+            }
+        }
+
+        impl From<Message> for MessageKind {
+            fn from(value: Message) -> Self {
+                value.kind()
+            }
+        }
+
+        impl Serialize for Message {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+
+                let mut state = serializer.serialize_tuple(2)?;
+                state.serialize_element(&self.code())?;
+
+                match self {
+                    $(Message::$name(value) => state.serialize_element(value)?,)*
+                }
+                state.end()
+            }
+        }
+
+        impl<'de> Deserialize<'de> for Message {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct Visitor;
+
+                impl<'de> serde::de::Visitor<'de> for Visitor {
+                    type Value = Message;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        write!(formatter, "a type code and a message content")
+                    }
+
+                    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+                    where
+                        A: serde::de::SeqAccess<'de>,
+                    {
+                        let no_value = || ::serde::de::Error::custom("no value found");
+                        let code = seq.next_element::<u8>()?.ok_or_else(no_value)?;
+                        let content = match code {
+                            $($discriminant => seq.next_element::<$name>()?.ok_or_else(no_value)?.into(),)*
+                            _ => return Err(::serde::de::Error::custom("invalid message type")),
+                        };
+                        Ok(content)
+                    }
+                }
+
+                deserializer.deserialize_tuple(3, Visitor)
+            }
+        }
+
+        impl<'a> Serialize for MessageWithId<'a> {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                let id = match self.message.as_ref() {
+                    Message::Init(_) | Message::Version(_) => None,
+                    _ => Some(self.id),
+                };
+
+                let mut state = serializer.serialize_tuple(3)?;
+                state.serialize_element(&self.message.code())?;
+                state.serialize_element(&id)?;
+
+                match self.message.as_ref() {
+                    $(Message::$name(value) => state.serialize_element(&value)?,)*
+                }
+                state.end()
+            }
+        }
+
+        impl<'de> Deserialize<'de> for MessageWithId<'de> {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct Visitor;
+
+                impl<'de> serde::de::Visitor<'de> for Visitor {
+                    type Value = MessageWithId<'de>;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        write!(formatter, "a type code, an id, and a message content")
+                    }
+
+                    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+                    where
+                        A: serde::de::SeqAccess<'de>,
+                    {
+                        let no_value = || ::serde::de::Error::custom("no value found");
+                        let code = seq.next_element::<u8>()?.ok_or_else(no_value)?;
+                        let (id, message) = if code == Init::DISCRIMINANT || code == Version::DISCRIMINANT {
+                            seq.next_element()?.ok_or_else(no_value)?;
+                            if code == Init::DISCRIMINANT {
+                                (0, Message::Init(seq.next_element()?.ok_or_else(no_value)?))
+                            } else {
+                                (0, Message::Version(seq.next_element()?.ok_or_else(no_value)?))
+                            }
+                        } else {
+                            let id = seq.next_element()?.ok_or_else(no_value)?;
+                            let message = match code {
+                                $($discriminant => seq.next_element::<$name>()?.ok_or_else(no_value)?.into(),)*
+                                _ => return Err(::serde::de::Error::custom("invalid message type")),
+                            };
+                            (id, message)
+                        };
+                        Ok(MessageWithId { id, message: Cow::Owned(message) })
+                    }
+                }
+
+                deserializer.deserialize_tuple(3, Visitor)
+            }
+        }
+
+        $(
+            impl $name {
+                #[allow(dead_code)]
+                const DISCRIMINANT: u8 = $discriminant;
+            }
+            impl From<$name> for Message {
+                fn from(value: $name) -> Self {
+                    Self::$name(value)
+                }
+            }
+
+            impl TryFrom<Message> for $name {
+                type Error = ();
+                fn try_from(value: Message) -> Result<Self, Self::Error> {
+                    if let Message::$name(value) = value {
+                        Ok(value)
+                    } else {
+                        Err(())
+                    }
+                }
+            }
+        )*
+    };
+}
+
+messages! {
+    Init: 1
+    Version: 2
+    Open: 3
+    Close: 4
+    Read: 5
+    Write: 6
+    LStat: 7
+    FStat: 8
+    SetStat: 9
+    FSetStat: 10
+    OpenDir: 11
+    ReadDir: 12
+    Remove: 13
+    MkDir: 14
+    RmDir: 15
+    RealPath: 16
+    Stat: 17
+    Rename: 18
+    ReadLink: 19
+    Symlink: 20
+    Status: 101
+    Handle: 102
+    Data: 103
+    Name: 104
+    Attrs: 105
+    Extended: 200
+    ExtendedReply: 201
+}
+
+impl From<Init> for Version {
+    fn from(value: Init) -> Self {
+        Self {
+            version: value.version,
+            extensions: value.extensions,
+        }
+    }
+}
+impl From<Version> for Init {
+    fn from(value: Version) -> Self {
+        Self {
+            version: value.version,
+            extensions: value.extensions,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[repr(u8)]
-#[non_exhaustive]
-pub enum Message {
-    Init(Init) = 1,
-    Version(Version) = 2,
-    Open(Open) = 3,
-    Close(Close) = 4,
-    Read(Read) = 5,
-    Write(Write) = 6,
-    LStat(LStat) = 7,
-    FStat(FStat) = 8,
-    SetStat(SetStat) = 9,
-    FSetStat(FSetStat) = 10,
-    OpenDir(OpenDir) = 11,
-    ReadDir(ReadDir) = 12,
-    Remove(Remove) = 13,
-    MkDir(MkDir) = 14,
-    RmDir(RmDir) = 15,
-    RealPath(RealPath) = 16,
-    Stat(Stat) = 17,
-    Rename(Rename) = 18,
-    ReadLink(ReadLink) = 19,
-    Symlink(Symlink) = 20,
-
-    Status(Status) = 101,
-    Handle(Handle) = 102,
-    Data(Data) = 103,
-    Name(Name) = 104,
-    Attrs(FileAttrs) = 105,
-
-    Extended(ExtendedRequest) = 200,
-    ExtendedReply(ExtendedReply) = 201,
+pub struct MessageWithId<'a> {
+    id: u32,
+    message: Cow<'a, Message>,
 }
 
 impl Message {
-    fn kind(&self) -> u8 {
-        match self {
-            Self::Init(_) => 1,
-            Self::Version(_) => 2,
-            Self::Open(_) => 3,
-            Self::Close(_) => 4,
-            Self::Read(_) => 5,
-            Self::Write(_) => 6,
-            Self::LStat(_) => 7,
-            Self::FStat(_) => 8,
-            Self::SetStat(_) => 9,
-            Self::FSetStat(_) => 10,
-            Self::OpenDir(_) => 11,
-            Self::ReadDir(_) => 12,
-            Self::Remove(_) => 13,
-            Self::MkDir(_) => 14,
-            Self::RmDir(_) => 15,
-            Self::RealPath(_) => 16,
-            Self::Stat(_) => 17,
-            Self::Rename(_) => 18,
-            Self::ReadLink(_) => 19,
-            Self::Symlink(_) => 20,
-            Self::Status(_) => 101,
-            Self::Handle(_) => 102,
-            Self::Data(_) => 103,
-            Self::Name(_) => 104,
-            Self::Attrs(_) => 105,
-            Self::Extended(_) => 200,
-            Self::ExtendedReply(_) => 201,
-        }
+    pub fn code(&self) -> u8 {
+        self.kind().code()
     }
-
     pub fn encode(&self, id: u32) -> Result<Bytes, Error> {
-        let mut vec = Vec::with_capacity(16);
-
-        let buf = &mut vec;
+        let mut encoder = SftpEncoder::new(Vec::with_capacity(16));
 
         // Reserve space for frame length
-        u32::encode(0, buf)?;
+        encoder.buf.put_u32(0);
 
-        // Type of the message
-        self.kind().encode(buf)?;
-
-        // ID of the message or the version of the protocol
-        match self {
-            Self::Init(inner) => inner.version.encode(buf)?,
-            Self::Version(inner) => inner.version.encode(buf)?,
-            _ => id.encode(buf)?,
+        MessageWithId {
+            id,
+            message: Cow::Borrowed(self),
         }
-
-        // Encode the rest of the frame
-        match self {
-            Self::Init(inner) => inner.encode(buf)?,
-            Self::Version(inner) => inner.encode(buf)?,
-            Self::Open(inner) => inner.encode(buf)?,
-            Self::Close(inner) => inner.encode(buf)?,
-            Self::Read(inner) => inner.encode(buf)?,
-            Self::Write(inner) => inner.encode(buf)?,
-            Self::LStat(inner) => inner.encode(buf)?,
-            Self::FStat(inner) => inner.encode(buf)?,
-            Self::SetStat(inner) => inner.encode(buf)?,
-            Self::FSetStat(inner) => inner.encode(buf)?,
-            Self::OpenDir(inner) => inner.encode(buf)?,
-            Self::ReadDir(inner) => inner.encode(buf)?,
-            Self::Remove(inner) => inner.encode(buf)?,
-            Self::MkDir(inner) => inner.encode(buf)?,
-            Self::RmDir(inner) => inner.encode(buf)?,
-            Self::RealPath(inner) => inner.encode(buf)?,
-            Self::Stat(inner) => inner.encode(buf)?,
-            Self::Rename(inner) => inner.encode(buf)?,
-            Self::ReadLink(inner) => inner.encode(buf)?,
-            Self::Symlink(inner) => inner.encode(buf)?,
-            Self::Status(inner) => inner.encode(buf)?,
-            Self::Handle(inner) => inner.encode(buf)?,
-            Self::Data(inner) => inner.encode(buf)?,
-            Self::Name(inner) => inner.as_slice().encode(buf)?,
-            Self::Attrs(inner) => inner.encode(buf)?,
-            Self::Extended(inner) => inner.encode(buf)?,
-            Self::ExtendedReply(inner) => inner.encode(buf)?,
-        }
+        .serialize(&mut encoder)?;
 
         // write frame length at the beginning of the frame
-        let frame_length = (vec.len() - 4) as u32;
-        let mut buf = vec.as_mut_slice();
-        frame_length.encode(&mut buf)?;
+        let frame_length = (encoder.buf.len() - std::mem::size_of::<u32>()) as u32;
+        let mut buf = encoder.buf.as_mut_slice();
+        buf.put_u32(frame_length);
 
-        Ok(vec.into())
+        Ok(encoder.buf.into())
     }
 
-    pub fn decode(buf: &mut dyn Buf) -> Result<(u32, Self), Error> {
-        let frame_length = u32::decode(buf)?;
+    pub fn decode(mut buf: &[u8]) -> Result<(u32, Self), Error> {
+        let frame_length = buf.get_u32() as usize;
 
         // Limit the read to this very frame
-        let mut buf = buf.take(frame_length as usize);
-        let buf = &mut buf;
+        let mut decoder = SftpDecoder::new(&buf[0..frame_length]);
 
-        // Type of the message
-        let kind = u8::decode(buf)?;
-        // ID of the message or version of the protocol
-        let id = u32::decode(buf)?;
+        let message_with_id = MessageWithId::deserialize(&mut decoder).map_err(Into::into)?;
 
-        match kind {
-            1 => {
-                let mut init = Init::decode(buf)?;
-                init.version = id;
-                Ok((0, Self::Init(init)))
-            }
-            2 => {
-                let mut version = Version::decode(buf)?;
-                version.version = id;
-                Ok((0, Self::Version(version)))
-            }
-            3 => Ok((id, Self::Open(SftpDecode::decode(buf)?))),
-            4 => Ok((id, Self::Close(SftpDecode::decode(buf)?))),
-            5 => Ok((id, Self::Read(SftpDecode::decode(buf)?))),
-            6 => Ok((id, Self::Write(SftpDecode::decode(buf)?))),
-            7 => Ok((id, Self::LStat(SftpDecode::decode(buf)?))),
-            8 => Ok((id, Self::FStat(SftpDecode::decode(buf)?))),
-            9 => Ok((id, Self::SetStat(SftpDecode::decode(buf)?))),
-            10 => Ok((id, Self::FSetStat(SftpDecode::decode(buf)?))),
-            11 => Ok((id, Self::OpenDir(SftpDecode::decode(buf)?))),
-            12 => Ok((id, Self::ReadDir(SftpDecode::decode(buf)?))),
-            13 => Ok((id, Self::Remove(SftpDecode::decode(buf)?))),
-            14 => Ok((id, Self::MkDir(SftpDecode::decode(buf)?))),
-            15 => Ok((id, Self::RmDir(SftpDecode::decode(buf)?))),
-            16 => Ok((id, Self::RealPath(SftpDecode::decode(buf)?))),
-            17 => Ok((id, Self::Stat(SftpDecode::decode(buf)?))),
-            18 => Ok((id, Self::Rename(SftpDecode::decode(buf)?))),
-            19 => Ok((id, Self::ReadLink(SftpDecode::decode(buf)?))),
-            20 => Ok((id, Self::Symlink(SftpDecode::decode(buf)?))),
-            101 => Ok((id, Self::Status(SftpDecode::decode(buf)?))),
-            102 => Ok((id, Self::Handle(SftpDecode::decode(buf)?))),
-            103 => Ok((id, Self::Data(SftpDecode::decode(buf)?))),
-            104 => Ok((id, Self::Name(SftpDecode::decode(buf)?))),
-            105 => Ok((id, Self::Attrs(SftpDecode::decode(buf)?))),
-            200 => Ok((id, Self::Extended(SftpDecode::decode(buf)?))),
-            201 => Ok((id, Self::ExtendedReply(SftpDecode::decode(buf)?))),
-            _ => Err(Error),
-        }
+        Ok((message_with_id.id, message_with_id.message.into_owned()))
     }
 }
 
@@ -417,24 +523,3 @@ SSH_FXP_EXTENDED: 200
 SSH_FXP_EXTENDED_REPLY: 201
 | u32: id | u8[frame length - 5]: data |
  */
-
-macro_rules! strong_alias {
-    ($new:ident: $existing:ty) => {
-        #[derive(Debug, PartialEq, Eq, Clone)]
-        pub struct $new($existing);
-
-        impl crate::decode::SftpDecode for $new {
-            fn decode(buf: &mut dyn bytes::Buf) -> Result<Self, crate::Error> {
-                Ok($new(<$existing>::decode(buf)?))
-            }
-        }
-
-        impl crate::encode::SftpEncode for &$new {
-            fn encode(self, buf: &mut dyn bytes::BufMut) -> Result<(), crate::Error> {
-                self.0.encode(buf)
-            }
-        }
-    };
-}
-
-pub(self) use strong_alias;

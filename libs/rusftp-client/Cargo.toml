@@ -8,6 +8,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bytes = { version = "1.4", features = ["serde"] }
 futures = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
@@ -20,4 +21,5 @@ tokio = { version = "1.0", features = [
 tokio-stream = { version = "0.1.11", features = ["sync", "net"] }
 tokio-util = "0.7"
 russh = "0.37"
-bytes = "1.4"
+serde = "1.0"
+thiserror = "1.0"

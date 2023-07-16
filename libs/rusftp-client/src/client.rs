@@ -47,8 +47,7 @@ impl SftpClient {
         // Check handshake response
         match channel.wait().await {
             Some(ChannelMsg::Data { data }) => {
-                let mut buf = data.as_ref();
-                match Message::decode(&mut buf) {
+                match Message::decode(data.as_ref()) {
                     // Valid response: continue
                     Ok((
                         _,
@@ -127,8 +126,7 @@ impl SftpClient {
                             break;
                         };
 
-                        let mut buf = data.as_ref();
-                        match Message::decode(&mut buf) {
+                        match Message::decode(data.as_ref()) {
                             Ok((id, message)) => {
                                 //eprintln!("Response #{id}: {message:?}");
                                 if let Some(tx) = onflight.remove(&id) {
@@ -156,7 +154,7 @@ impl SftpClient {
             StatusCode::Failure.to_message("Could not send request to SFTP client".into())
         } else {
             rx.await.unwrap_or(
-                StatusCode::Failure.to_message("Could get reply from SFTP client".into()),
+                StatusCode::Failure.to_message("Could not get reply from SFTP client".into()),
             )
         }
     }

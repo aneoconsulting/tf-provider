@@ -1,6 +1,5 @@
-/*
-SSH_FXP_DATA: 103
-(DATA) | u32: id | u32: data length | u8[data length]: data |
- */
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
 
-pub type Data = bytes::Bytes;
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
+pub struct Data(pub Bytes);
