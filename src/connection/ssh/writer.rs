@@ -1,6 +1,6 @@
 use std::{future::Future, io::ErrorKind, pin::Pin, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use rusftp::{pflags, SftpClient, StatusCode};
 use russh::client::Handle;
 use tokio::io::AsyncWrite;
@@ -28,58 +28,39 @@ impl SftpWriter {
         if overwrite {
             flags |= pflags::TRUNCATE;
         } else {
-            eprintln!("Check if file already exists");
             // Check if file exist in case the EXCLUDE flag is not taken into account
             match client
-                .send(
-                    rusftp::LStat {
-                        path: rusftp::Path(filename.to_owned().into()),
-                    }
-                    .into(),
-                )
+                .lstat(rusftp::LStat {
+                    path: rusftp::Path(filename.to_owned().into()),
+                })
                 .await
             {
-                rusftp::Message::Attrs(_) => {
+                Ok(_) => {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::AlreadyExists,
                         "File already exists",
                     )
-                    .into());
+                    .into())
                 }
-                rusftp::Message::Status(status) => {
+                Err(status) => {
                     if status.code != StatusCode::NoSuchFile as u32 {
                         return Err(std::io::Error::from(status).into());
                     }
-                }
-                _ => {
-                    return Err(anyhow!("Bad Message"));
                 }
             }
             flags |= pflags::EXCLUDE;
         }
 
-        let handle = match client
-            .send(
-                rusftp::Open {
-                    filename: rusftp::Path(filename.to_owned().into()),
-                    pflags: flags,
-                    attrs: rusftp::Attrs {
-                        perms: Some(mode),
-                        ..Default::default()
-                    },
-                }
-                .into(),
-            )
-            .await
-        {
-            rusftp::Message::Status(status) => {
-                return Err(std::io::Error::from(status).into());
-            }
-            rusftp::Message::Handle(h) => h,
-            _ => {
-                return Err(anyhow!("Bad reply"));
-            }
-        };
+        let handle = client
+            .open(rusftp::Open {
+                filename: rusftp::Path(filename.to_owned().into()),
+                pflags: flags,
+                attrs: rusftp::Attrs {
+                    perms: Some(mode),
+                    ..Default::default()
+                },
+            })
+            .await?;
 
         Ok(SftpWriter {
             client: Arc::new(client),
@@ -114,27 +95,15 @@ impl AsyncWrite for SftpWriter {
             let data = rusftp::Data(buf[0..length].to_owned().into());
             self.request.get_or_insert(Box::pin(async move {
                 match client
-                    .send(
-                        rusftp::Write {
-                            handle,
-                            offset,
-                            data,
-                        }
-                        .into(),
-                    )
+                    .write(rusftp::Write {
+                        handle,
+                        offset,
+                        data,
+                    })
                     .await
                 {
-                    rusftp::Message::Status(status) => {
-                        if status.code == StatusCode::Ok as u32 {
-                            Ok(length)
-                        } else {
-                            Err(std::io::Error::from(status))
-                        }
-                    }
-                    _ => Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "Bad reply",
-                    )),
+                    Ok(()) => Ok(length),
+                    Err(status) => Err(std::io::Error::from(status)),
                 }
             }))
         };
