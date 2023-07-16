@@ -124,7 +124,7 @@ impl Connection for ConnectionSsh {
 
         client
             .remove(rusftp::Remove {
-                path: rusftp::Path(path.to_owned().into()),
+                path: path.to_owned().into(),
             })
             .await
             .map_err(Into::into)

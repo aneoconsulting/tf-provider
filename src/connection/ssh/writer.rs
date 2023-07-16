@@ -31,7 +31,7 @@ impl SftpWriter {
             // Check if file exist in case the EXCLUDE flag is not taken into account
             match client
                 .lstat(rusftp::LStat {
-                    path: rusftp::Path(filename.to_owned().into()),
+                    path: filename.to_owned().into(),
                 })
                 .await
             {
@@ -53,7 +53,7 @@ impl SftpWriter {
 
         let handle = client
             .open(rusftp::Open {
-                filename: rusftp::Path(filename.to_owned().into()),
+                filename: filename.to_owned().into(),
                 pflags: flags,
                 attrs: rusftp::Attrs {
                     perms: Some(mode),
@@ -92,7 +92,7 @@ impl AsyncWrite for SftpWriter {
             let handle = self.handle.clone();
             let offset = self.offset;
             let length = buf.len().min(32768); // read at most 32K
-            let data = rusftp::Data(buf[0..length].to_owned().into());
+            let data = buf[0..length].to_owned().into();
             self.request.get_or_insert(Box::pin(async move {
                 match client
                     .write(rusftp::Write {

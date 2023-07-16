@@ -22,7 +22,7 @@ impl SftpReader {
 
         let handle = client
             .open(rusftp::Open {
-                filename: rusftp::Path(filename.to_owned().into()),
+                filename: filename.to_owned().into(),
                 pflags: rusftp::pflags::READ,
                 attrs: Default::default(),
             })
