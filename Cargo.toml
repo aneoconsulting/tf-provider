@@ -10,8 +10,8 @@ edition = "2021"
 [dependencies.tf-provider]
 path = "libs/tf-provider"
 
-[dependencies.rusftp-client]
-path = "libs/rusftp-client"
+[dependencies.rusftp]
+path = "libs/rusftp"
 
 [dependencies]
 async-process = "1.6"

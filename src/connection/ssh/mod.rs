@@ -3,7 +3,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc};
 use crate::connection::{Connection, ExecutionResult};
 use anyhow::Result;
 use async_trait::async_trait;
-use rusftp_client::{Message, Path, Remove, SftpClient, StatusCode};
+use rusftp::{SftpClient, StatusCode};
 use serde::{Deserialize, Serialize};
 use tf_provider::{
     map, Attribute, AttributeConstraint, AttributePath, AttributeType, Description, Diagnostics,
@@ -122,10 +122,10 @@ impl Connection for ConnectionSsh {
         let client = self.get_client(config).await?;
         let client = SftpClient::new(client.handle.channel_open_session().await?).await?;
 
-        if let Message::Status(status) = client
+        if let rusftp::Message::Status(status) = client
             .send(
-                Remove {
-                    path: Path(path.to_owned().into()),
+                rusftp::Remove {
+                    path: rusftp::Path(path.to_owned().into()),
                 }
                 .into(),
             )

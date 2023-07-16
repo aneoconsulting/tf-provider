@@ -2,7 +2,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use bytes::Bytes;
-use rusftp_client::{SftpClient, StatusCode};
+use rusftp::{SftpClient, StatusCode};
 use russh::client::Handle;
 use tokio::io::AsyncRead;
 
@@ -10,7 +10,7 @@ use super::ClientHandler;
 
 pub struct SftpReader {
     client: Arc<SftpClient>,
-    handle: rusftp_client::Handle,
+    handle: rusftp::Handle,
     offset: u64,
     eof: bool,
     request: Option<Pin<Box<dyn Future<Output = std::io::Result<Bytes>> + Send>>>,
@@ -22,19 +22,19 @@ impl SftpReader {
 
         let handle = match client
             .send(
-                rusftp_client::Open {
-                    filename: rusftp_client::Path(filename.to_owned().into()),
-                    pflags: rusftp_client::pflags::READ,
+                rusftp::Open {
+                    filename: rusftp::Path(filename.to_owned().into()),
+                    pflags: rusftp::pflags::READ,
                     attrs: Default::default(),
                 }
                 .into(),
             )
             .await
         {
-            rusftp_client::Message::Status(status) => {
+            rusftp::Message::Status(status) => {
                 return Err(std::io::Error::from(status).into());
             }
-            rusftp_client::Message::Handle(h) => h,
+            rusftp::Message::Handle(h) => h,
             _ => {
                 return Err(anyhow!("Bad reply"));
             }
@@ -72,7 +72,7 @@ impl AsyncRead for SftpReader {
             self.request.get_or_insert(Box::pin(async move {
                 match client
                     .send(
-                        rusftp_client::Read {
+                        rusftp::Read {
                             handle,
                             offset,
                             length,
@@ -81,14 +81,14 @@ impl AsyncRead for SftpReader {
                     )
                     .await
                 {
-                    rusftp_client::Message::Status(status) => {
+                    rusftp::Message::Status(status) => {
                         if status.code == StatusCode::Eof as u32 {
                             Ok(Bytes::default())
                         } else {
                             Err(std::io::Error::from(status))
                         }
                     }
-                    rusftp_client::Message::Data(data) => Ok(data.0),
+                    rusftp::Message::Data(data) => Ok(data.0),
                     _ => Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
                         "Bad reply",

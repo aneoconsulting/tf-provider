@@ -747,7 +747,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusftp-client"
+name = "rusftp"
 version = "0.1.0"
 dependencies = [
  "bytes",

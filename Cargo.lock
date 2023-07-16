@@ -1505,7 +1505,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusftp-client"
+name = "rusftp"
 version = "0.1.0"
 dependencies = [
  "bytes",
@@ -1854,7 +1854,7 @@ dependencies = [
  "futures-util",
  "rand 0.8.5",
  "rcgen",
- "rusftp-client",
+ "rusftp",
  "russh",
  "russh-keys",
  "rust-crypto",
