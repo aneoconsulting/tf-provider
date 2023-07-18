@@ -2,3 +2,5 @@ target
 .nix-gcroots
 .direnv
 /tf-test
+tools/tfplugindocs
+docs

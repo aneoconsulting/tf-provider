@@ -1,0 +1,110 @@
+#! /bin/sh
+
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+export PATH="$SCRIPT_DIR:$PATH"
+
+usage() {
+cat <<EOF
+Usage: $0 [<args>]
+
+    --examples-dir <ARG>             examples directory based on provider-dir
+                                        (default: "examples")
+    --ignore-deprecated <ARG>        don't generate documentation for deprecated resources and data-sources
+                                        (default: "false")
+    --provider-binary <ARG>          relative or absolute path to the precompiled provider binary
+    --provider-name <ARG>            provider name, as used in Terraform configurations
+    --rendered-provider-name <ARG>   provider name, as generated in documentation (ex. page titles, ...)
+    --rendered-website-dir <ARG>     output directory based on provider-dir
+                                        (default: "docs")
+    --tf-version <ARG>               terraform binary version to download
+    --tfplugindocs-version           tfplugindocs binary version to download
+                                        (default: 0.16.0)
+    --tfplugindocs-platform          tfplugindocs binary platform to download
+                                        (default: linux_amd64)
+    --website-source-dir <ARG>       templates directory based on provider-dir
+                                        (default: "templates")
+    --website-temp-dir <ARG>         temporary directory (used during generation)
+EOF
+}
+
+EXAMPLES_DIR=
+IGNORE_DEPRECATED=
+PROVIDER_BINARY=
+PROVIDER_NAME=
+RENDERED_PROVIDER_NAME=
+RENDERED_WEBSITE_DIR=
+TF_VERSION=
+TFPLUGINDOCS_VERSION="0.16.0"
+TFPLUGINDOCS_PLATFORM="linux_amd64"
+WEBSITE_SOURCE_DIR=
+WEBSITE_TEMP_DIR=
+
+while [ $# != 0 ]; do
+  case "$1" in
+    --examples-dir)
+      EXAMPLES_DIR="$2"
+      ;;
+    --ignore-deprecated)
+      IGNORE_DEPRECATED="$2"
+      ;;
+    --provider-binary)
+      PROVIDER_BINARY="$2"
+      ;;
+    --provider-name)
+      PROVIDER_NAME="$2"
+      ;;
+    --rendered-provider-name)
+      RENDERED_PROVIDER_NAME="$2"
+      ;;
+    --rendered-website-dir)
+      RENDERED_WEBSITE_DIR="$2"
+      ;;
+    --tf-version)
+      TF_VERSION="$2"
+      ;;
+    --website-source-dir)
+      WEBSITE_SOURCE_DIR="$2"
+      ;;
+    --website-temp-dir)
+      WEBSITE_TEMP_DIR="$2"
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Invalid option '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+
+  if [ -z "$2" ]; then
+    echo "Invalid value '$2' for option '$1'" >&2
+    usage >&2
+    exit 1
+  fi
+
+  shift 2
+done
+
+if ! which tfplugindocs >/dev/null 2>&1; then
+  ZIP_FILE="tfplugindocs_${TFPLUGINDOCS_VERSION}_${TFPLUGINDOCS_PLATFORM}.zip"
+  wget -O "$SCRIPT_DIR/$ZIP_FILE" \
+    "https://github.com/hashicorp/terraform-plugin-docs/releases/download/v${TFPLUGINDOCS_VERSION}/$ZIP_FILE"
+  unzip "$SCRIPT_DIR/$ZIP_FILE" tfplugindocs -d "$SCRIPT_DIR"
+  rm "$SCRIPT_DIR/$ZIP_FILE"
+fi
+
+mkdir -p docs
+
+TERRAFORM_PROVIDER_BINARY="$PROVIDER_BINARY" \
+exec tfplugindocs generate \
+  ${EXAMPLES_DIR:+--examples-dir "$EXAMPLES_DIR"} \
+  ${IGNORE_DEPRECATED:+--ignore-deprecated "$IGNORE_DEPRECATED"} \
+  ${PROVIDER_NAME:+--provider-name "$PROVIDER_NAME"} \
+  ${RENDERED_PROVIDER_NAME:+--rendered-provider-name "$RENDERED_PROVIDER_NAME"} \
+  ${RENDERED_WEBSITE_DIR:+--rendered-website-dir "$RENDERED_WEBSITE_DIR"} \
+  ${TF_VERSION:+--tf-version "$TF_VERSION"} \
+  ${WEBSITE_SOURCE_DIR:+--website-source-dir "$WEBSITE_SOURCE_DIR"} \
+  ${WEBSITE_TEMP_DIR:+--website-temp-dir "$WEBSITE_TEMP_DIR"}
