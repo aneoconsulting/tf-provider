@@ -17,7 +17,7 @@ jobs:
           target: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2.2.1
         with:
-          shared-key: "cmdrs-build"
+          shared-key: "cmdrs-build-${{ runner.os }}"
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true

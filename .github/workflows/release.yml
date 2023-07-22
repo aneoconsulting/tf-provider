@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      NAME: cmd
+      TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -19,16 +22,35 @@ jobs:
           target: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2.2.1
         with:
-          shared-key: "cmdrs-build"
+          shared-key: "cmdrs-build-${{ runner.os }}"
       - uses: actions-rs/cargo@v1
         with:
           use-cross: true
           command: build
           args: --target x86_64-unknown-linux-musl --release
-      - run: zip terraform-provider-cmd_0.1.0_linux_amd64.zip terraform-provider-cmd
-        working-directory: ./target/x86_64-unknown-linux-musl/release/
+      - run: |
+          set -ex
+          tools/generate-docs --provider-name "${NAME}" --provider-binary target/x86_64-unknown-linux-musl/release/terraform-provider-cmd
+      - run: git diff --exit-code docs
+      - run: |
+          set -ex
+          echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --import
+          mkdir release
+          (
+            cd docs
+            zip -r "../release/terraform-provider-${NAME}_${TAG#v}_docs.zip" .
+          )
+          cp manifest.json "release/terraform-provider-${NAME}_${TAG#v}_manifest.json"
+          cp target/x86_64-unknown-linux-musl/release/terraform-provider-cmd "release/terraform-provider-${NAME}_${TAG#v}"
+          cd release
+          zip "terraform-provider-${NAME}_${TAG#v}_linux_amd64.zip" "terraform-provider-${NAME}_${TAG#v}"
+          rm terraform-provider-${NAME}_${TAG#v}
+          shasum -a 256 *.zip > terraform-provider-${NAME}_${TAG#v}_SHA256SUMS
+          gpg --detach-sign terraform-provider-${NAME}_${TAG#v}_SHA256SUMS
       - name: Upload Release Asset
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }} terraform-provider-cmd_0.1.0_linux_amd64.zip || true
-        working-directory: ./target/x86_64-unknown-linux-musl/release/
+        run: |
+          set -ex
+          gh release upload "${TAG}" *
+        working-directory: release

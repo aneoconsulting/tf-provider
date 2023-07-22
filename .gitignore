@@ -3,4 +3,3 @@ target
 .direnv
 /tf-test
 tools/tfplugindocs
-docs
