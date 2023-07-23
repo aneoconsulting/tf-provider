@@ -10,49 +10,113 @@ env:
   RELEASE: ${{ github.event.release.name }}
 
 jobs:
-  build-and-release:
-    name: Build and Release
-    runs-on: ubuntu-latest
+  build:
+    name: Build
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest, cross: true }
+          - { target: i586-unknown-linux-musl, os: linux, arch: "386", runner: ubuntu-latest, cross: true }
+          - { target: aarch64-unknown-linux-musl, os: linux, arch: arm64, runner: ubuntu-latest, cross: true }
+          - { target: arm-unknown-linux-musleabi, os: linux, arch: arm, runner: ubuntu-latest, cross: true }
+          - { target: x86_64-unknown-freebsd, os: freebsd, arch: amd64, runner: ubuntu-latest, cross: true } # Does not run
+          #- { target: i686-unknown-freebsd, os: freebsd, arch: "386", runner: ubuntu-latest, cross: true } # Does not compile
+          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest, cross: false }
+          #- { target: aarch64-apple-darwin, os: darwin, arch: arm64, runner: macos-latest, cross: false } # Does not compile
+          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest, cross: false }
+          - { target: i686-pc-windows-msvc, os: windows, arch: "386", runner: windows-latest, cross: false }
+          #- { target: aarch64-pc-windows-msvc, os: windows, arch: arm64, runner: windows-latest, cross: false } # Does not compile
+          #- { target: wasm32-wasi, os: wasi, arch: wasm, runner: ubuntu-latest, cross: false } # Does not compile
+    runs-on: ${{ matrix.job.runner }}
+    env:
+      TARGET: ${{ matrix.job.target }}
+      OS: ${{ matrix.job.os }}
+      ARCH: ${{ matrix.job.arch }}
+      PLATFORM: "${{ matrix.job.os }}_${{ matrix.job.arch }}"
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.71.0
           override: true
-          target: x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@v2.2.1
+          target: ${{ matrix.job.target }}
+          components: rust-src,rustfmt,clippy
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2.2.1
         with:
-          shared-key: "cmdrs-build-${{ runner.os }}"
-      - uses: actions-rs/cargo@v1
+          shared-key: "cmdrs-build-${{ matrix.job.target }}"
+      - name: Build
+        uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: ${{ matrix.job.cross }}
+          args: --release --target=${{ matrix.job.target }} --locked
           command: build
-          args: --target x86_64-unknown-linux-musl --release
-      - run: |
+      - name: Create Assets
+        if: runner.os != 'Windows'
+        run: |
           set -ex
-          tools/generate-docs --provider-name "${NAME}" --provider-binary target/x86_64-unknown-linux-musl/release/terraform-provider-cmd
-      - run: git diff --exit-code docs
-      - run: |
-          set -ex
-          echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --import
           mkdir release
-          (
-            cd docs
-            zip -r "../release/terraform-provider-${NAME}_${TAG#v}_docs.zip" .
-          )
-          cp manifest.json "release/terraform-provider-${NAME}_${TAG#v}_manifest.json"
-          cp target/x86_64-unknown-linux-musl/release/terraform-provider-cmd "release/terraform-provider-${NAME}_${TAG#v}"
-          cd release
-          zip "terraform-provider-${NAME}_${TAG#v}_linux_amd64.zip" "terraform-provider-${NAME}_${TAG#v}"
-          rm terraform-provider-${NAME}_${TAG#v}
-          shasum -a 256 *.zip > terraform-provider-${NAME}_${TAG#v}_SHA256SUMS
-          gpg --detach-sign terraform-provider-${NAME}_${TAG#v}_SHA256SUMS
-      - name: Upload Release Asset
+          mv "target/${TARGET}/release/terraform-provider-${NAME}" "terraform-provider-${NAME}_${TAG#v}"
+          zip "release/terraform-provider-${NAME}_${TAG#v}_${PLATFORM}.zip" "terraform-provider-${NAME}_${TAG#v}"
+      - name: Create Assets
+        if: runner.os == 'Windows'
+        run: |
+          $version = ${env:TAG} -replace "v"
+          New-Item -ItemType Directory -Name release
+          Move-Item -Path "target/${env:TARGET}/release/terraform-provider-${env:NAME}.exe" -Destination "terraform-provider-${env:NAME}_${version}.exe"
+          Compress-Archive -Path "terraform-provider-${env:NAME}_${version}.exe" -Destination "release/terraform-provider-${env:NAME}_${version}_${env:PLATFORM}.zip"
+      - name: Upload Assets
+        shell: sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: release
+        run: |
+          gh release upload "${RELEASE}" *
+  publish:
+    name: Publish
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Download Assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -ex
-          gh release upload "${RELEASE}" *
+          mkdir release
+          cd release
+          gh release download "${RELEASE}"
+      - name: Create Assets
         working-directory: release
+        run: |
+          set -ex
+          echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --import
+          pgp_id="$(gpg --with-colon -k | awk -F: '/^pub:/ { print $5 }')"
+          cat > release.json <<EOF
+          {
+            "name": "${NAME}",
+            "version": "${TAG#v}",
+            "pgp": {
+              "source": "lemaitre.pgp.pub",
+              "key_id": "$pgp_id",
+              "ascii_armor": "$(cat ../lemaitre.pgp.pub)"
+            }
+          }
+          EOF
+          shasum -a 256 *.zip > "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
+          gpg --detach-sign "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
+          cp ../manifest.json "terraform-provider-${NAME}_${TAG#v}_manifest.json"
+      - name: Upload Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: release
+        run: |
+          rm *.zip
+          gh release upload "${RELEASE}" *

@@ -11,18 +11,18 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest }
-          - { target: i586-unknown-linux-musl, os: linux, arch: "386", runner: ubuntu-latest }
-          - { target: aarch64-unknown-linux-musl, os: linux, arch: arm64, runner: ubuntu-latest }
-          - { target: arm-unknown-linux-musleabi, os: linux, arch: arm, runner: ubuntu-latest }
-          #- { target: x86_64-unknown-freebsd, os: freebsd, arch: amd64, runner: ubuntu-latest } # Does not run
-          #- { target: i686-unknown-freebsd, os: freebsd, arch: "386", runner: ubuntu-latest } # Does not run
-          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest }
-          #- { target: aarch64-apple-darwin, os: darwin, arch: arm64, runner: macos-latest } # Does not compile
-          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest }
-          - { target: i686-pc-windows-msvc, os: windows, arch: "386", runner: windows-latest }
-          #- { target: aarch64-pc-windows-msvc, os: windows, arch: arm64, runner: windows-latest } # Does not compile
-          #- { target: wasm32-wasi, os: wasi, arch: wasm, runner: ubuntu-latest } # Does not compile
+          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest, cross: true }
+          - { target: i586-unknown-linux-musl, os: linux, arch: "386", runner: ubuntu-latest, cross: true }
+          - { target: aarch64-unknown-linux-musl, os: linux, arch: arm64, runner: ubuntu-latest, cross: true }
+          - { target: arm-unknown-linux-musleabi, os: linux, arch: arm, runner: ubuntu-latest, cross: true }
+          #- { target: x86_64-unknown-freebsd, os: freebsd, arch: amd64, runner: ubuntu-latest, cross: true } # Does not run
+          #- { target: i686-unknown-freebsd, os: freebsd, arch: "386", runner: ubuntu-latest, cross: true } # Does not compile
+          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest, cross: false }
+          #- { target: aarch64-apple-darwin, os: darwin, arch: arm64, runner: macos-latest, cross: false } # Does not compile
+          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest, cross: false }
+          - { target: i686-pc-windows-msvc, os: windows, arch: "386", runner: windows-latest, cross: false }
+          #- { target: aarch64-pc-windows-msvc, os: windows, arch: arm64, runner: windows-latest, cross: false } # Does not compile
+          #- { target: wasm32-wasi, os: wasi, arch: wasm, runner: ubuntu-latest, cross: false } # Does not compile
     runs-on: ${{ matrix.job.runner }}
     steps:
       - name: Checkout
@@ -41,18 +41,18 @@ jobs:
       - name: Build
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: ${{ matrix.job.cross }}
           args: --release --target=${{ matrix.job.target }} --locked
           command: build
       - name: Clippy
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: ${{ matrix.job.cross }}
           args: --release --target=${{ matrix.job.target }} --locked
           command: clippy
       - name: Test
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
+          use-cross: ${{ matrix.job.cross }}
           args: --release --target=${{ matrix.job.target }} --locked
           command: test
