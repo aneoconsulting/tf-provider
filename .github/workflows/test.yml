@@ -4,6 +4,9 @@ on:
 
 name: Test
 
+env:
+  NAME: cmd
+
 jobs:
   build-and-release:
     name: Build and Test
@@ -56,3 +59,8 @@ jobs:
           use-cross: ${{ matrix.job.cross }}
           args: --release --target=${{ matrix.job.target }} --locked
           command: test
+      - name: Doc
+        if: matrix.job.target == 'x86_64-unknown-linux-musl'
+        run: |
+          tools/generate-docs --provider-name "${NAME}" --provider-binary "target/x86_64-unknown-linux-musl/release/terraform-provider-${NAME}"
+          git diff --exit-code --name-only docs

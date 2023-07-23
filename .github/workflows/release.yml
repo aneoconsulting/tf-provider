@@ -94,9 +94,10 @@ jobs:
           cd release
           gh release download "${RELEASE}"
       - name: Create Assets
-        working-directory: release
         run: |
           set -ex
+          zip -r release/terraform-provider-${NAME}_${TAG#v}_docs.zip docs
+          cd release
           echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --import
           pgp_id="$(gpg --with-colon -k | awk -F: '/^pub:/ { print $5 }')"
           cat > release.json <<EOF
@@ -111,6 +112,7 @@ jobs:
           }
           EOF
           shasum -a 256 *.zip > "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
+          rm *.zip
           gpg --detach-sign "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
           cp ../manifest.json "terraform-provider-${NAME}_${TAG#v}_manifest.json"
       - name: Upload Assets
@@ -118,5 +120,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: release
         run: |
-          rm *.zip
           gh release upload "${RELEASE}" *
