@@ -63,6 +63,7 @@ impl Connection for ConnectionLocal {
     }
 
     /// Return a writer to write a remote file
+    #[cfg(target_family = "unix")]
     async fn write<'a>(
         &self,
         _config: &Self::Config<'a>,
@@ -76,6 +77,30 @@ impl Connection for ConnectionLocal {
             .truncate(true)
             .create_new(!overwrite)
             .mode(mode)
+            .open(path)
+            .await
+            .map_err(Into::into)
+    }
+    #[cfg(target_family = "windows")]
+    async fn write<'a>(
+        &self,
+        _config: &Self::Config<'a>,
+        path: &str,
+        mode: u32,
+        overwrite: bool,
+    ) -> Result<Self::Writer> {
+        // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
+        let attr = if (mode & 0o222) != 0 {
+            128 // FILE_ATTRIBUTE_NORMAL
+        } else {
+            1 // FILE_ATTRIBUTE_READONLY
+        };
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .create_new(!overwrite)
+            .attributes(attr)
             .open(path)
             .await
             .map_err(Into::into)

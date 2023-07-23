@@ -7,24 +7,52 @@ name: Test
 jobs:
   build-and-release:
     name: Build and Test
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest }
+          - { target: i586-unknown-linux-musl, os: linux, arch: "386", runner: ubuntu-latest }
+          - { target: aarch64-unknown-linux-musl, os: linux, arch: arm64, runner: ubuntu-latest }
+          - { target: arm-unknown-linux-musleabi, os: linux, arch: arm, runner: ubuntu-latest }
+          #- { target: x86_64-unknown-freebsd, os: freebsd, arch: amd64, runner: ubuntu-latest } # Does not run
+          #- { target: i686-unknown-freebsd, os: freebsd, arch: "386", runner: ubuntu-latest } # Does not run
+          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest }
+          #- { target: aarch64-apple-darwin, os: darwin, arch: arm64, runner: macos-latest } # Does not compile
+          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest }
+          - { target: i686-pc-windows-msvc, os: windows, arch: "386", runner: windows-latest }
+          #- { target: aarch64-pc-windows-msvc, os: windows, arch: arm64, runner: windows-latest } # Does not compile
+          #- { target: wasm32-wasi, os: wasi, arch: wasm, runner: ubuntu-latest } # Does not compile
+    runs-on: ${{ matrix.job.runner }}
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Toolchain
+        uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.71.0
           override: true
-          target: x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@v2.2.1
+          target: ${{ matrix.job.target }}
+          components: rust-src,rustfmt,clippy
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2.2.1
         with:
-          shared-key: "cmdrs-build-${{ runner.os }}"
-      - uses: actions-rs/cargo@v1
+          shared-key: "cmdrs-build-${{ matrix.job.target }}"
+      - name: Build
+        uses: actions-rs/cargo@v1
         with:
           use-cross: true
+          args: --release --target=${{ matrix.job.target }} --locked
           command: build
-          args: --target x86_64-unknown-linux-musl --release
-      - uses: actions-rs/cargo@v1
+      - name: Clippy
+        uses: actions-rs/cargo@v1
         with:
           use-cross: true
+          args: --release --target=${{ matrix.job.target }} --locked
+          command: clippy
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: true
+          args: --release --target=${{ matrix.job.target }} --locked
           command: test
-          args: --target x86_64-unknown-linux-musl --release

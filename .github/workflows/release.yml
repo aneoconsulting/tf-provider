@@ -4,15 +4,17 @@ on:
 
 name: Release
 
+env:
+  NAME: cmd
+  TAG: ${{ github.event.release.tag_name }}
+  RELEASE: ${{ github.event.release.name }}
+
 jobs:
   build-and-release:
     name: Build and Release
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      NAME: cmd
-      TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -52,5 +54,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -ex
-          gh release upload "${TAG}" *
+          gh release upload "${RELEASE}" *
         working-directory: release

@@ -38,7 +38,6 @@ russh-keys = "0.37"
 
 async-trait = "0.1"
 anyhow = "1"
-rcgen = "0.10"
 base64 = "0.21"
 time = "0.3"
 rust-crypto = "0.2"

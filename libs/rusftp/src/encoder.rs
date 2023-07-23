@@ -90,14 +90,13 @@ impl<'a> ser::Serializer for &'a mut SftpEncoder {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        let len = v.len();
-
-        if len >= 0x100000000 {
+        let Ok(len) = u32::try_from(v.len()) else {
             return Err(Error::Unsupported);
-        }
-        if self.buf.remaining_mut() >= len + std::mem::size_of::<u32>() {
+        };
+
+        if self.buf.remaining_mut() >= len as usize + std::mem::size_of::<u32>() {
             if self.encode_length() {
-                self.buf.put_u32(len as u32);
+                self.buf.put_u32(len);
             }
             self.buf.put(v);
             Ok(())
@@ -163,11 +162,11 @@ impl<'a> ser::Serializer for &'a mut SftpEncoder {
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error> {
         if let Some(len) = len {
-            if len >= 0x100000000 {
+            let Ok(len) = u32::try_from(len) else {
                 return Err(Error::Unsupported);
-            }
+            };
             if self.encode_length() {
-                self.serialize_u32(len as u32)?;
+                self.serialize_u32(len)?;
             }
         }
         self.current_field = "";
@@ -202,11 +201,11 @@ impl<'a> ser::Serializer for &'a mut SftpEncoder {
 
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error> {
         if let Some(len) = len {
-            if len >= 0x100000000 {
+            let Ok(len) = u32::try_from(len) else {
                 return Err(Error::Unsupported);
-            }
+            };
             if self.encode_length() {
-                self.serialize_u32(len as u32)?;
+                self.serialize_u32(len)?;
             }
         }
         self.current_field = "";
