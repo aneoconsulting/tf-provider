@@ -85,3 +85,13 @@ jobs:
       name: cmd
       tag: ${{ github.event.release.tag_name }}
     secrets: inherit
+  gh-pages:
+    needs: publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/gh-pages.yml
+    with:
+      name: cmd
+    secrets: inherit

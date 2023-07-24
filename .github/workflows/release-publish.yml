@@ -38,18 +38,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir release build
-          cd build
+          mkdir release assets
+          cd assets
           gh release download "${TAG}"
       - name: Import PGP
         run: |
           echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --import
       - name: Checksums
-        working-directory: release
+        working-directory: assets
         run: |
           set -ex
-          shasum -a 256 ../build/*.zip > "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
-          gpg --detach-sign "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
+          shasum -a 256 *.zip > "../release/terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
+          gpg --detach-sign "../release/terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
       - name: Documentation
         working-directory: docs
         run: |
@@ -65,7 +65,7 @@ jobs:
             "pgp": {
               "source": "lemaitre.pgp.pub",
               "key_id": "$pgp_id",
-              "ascii_armor": "$(cat ../lemaitre.pgp.pub)"
+              "ascii_armor": $(jq -cn --rawfile armor ../lemaitre.pgp.pub '$armor')
             }
           }
           EOF

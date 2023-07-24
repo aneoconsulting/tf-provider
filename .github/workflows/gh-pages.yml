@@ -1,0 +1,147 @@
+name: Github Pages
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type : string
+    secrets:
+      PGP_PRIVATE_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      name:
+        required: true
+        type : string
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+env:
+  OWNER: ${{ github.repository_owner }}
+  REPO: ${{ github.repository }}
+  NAME: ${{ inputs.name }}
+
+jobs:
+  # Build job
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -ex
+
+          jq-inplace() {
+            file="$1"
+            shift
+            if jq "$@" "$file" > "$file.tmp"; then
+              mv "$file.tmp" "$file"
+            else
+              ret=$?
+              rm -f "$file.tmp"
+              return $ret
+            fi
+          }
+          
+          mkdir -p v1/providers/${OWNER}/${NAME}
+          cd v1/providers/${OWNER}/${NAME}
+
+          echo '{ "versions": [] }' > versions
+
+          gh api repos/${REPO}/releases | jq -c '.[]' | while IFS= read release; do
+            : "$release"
+            id="$(jq -r .id <<<$release)"
+            tag="$(jq -r .tag_name <<<$release)"
+            assets="$(jq -c .assets <<<$release)"
+
+            mkdir -p "${tag#v}/.assets"
+            ( cd "${tag#v}"
+              ( cd .assets && gh release download -R "$REPO" "${tag}" )
+
+              pgp_source="$(jq -r '.pgp.source' .assets/release.json)"
+              pgp_id="$(jq -r '.pgp.key_id' .assets/release.json)"
+              pgp_armor="$(jq -c '.pgp.ascii_armor' .assets/release.json)"
+              protocols="$(jq -c '.metadata.protocol_versions' ".assets/terraform-provider-${NAME}_${tag#v}_manifest.json")"
+
+              echo '[]' > platforms
+
+              jq -c '.[]' <<<$assets | while IFS= read asset; do
+                : "$asset"
+                filename="$(jq -r .name <<<$asset)"
+                case "$filename" in
+                  terraform-*.zip)
+                    basename="${filename%.zip}"
+                    platform="${basename#terraform-provider-${NAME}_${tag#v}_}"
+                    os="${platform%_*}"
+                    arch="${platform#*_}"
+
+                    mkdir -p "download/${os}"
+                    cat > "download/${os}/${arch}" <<EOF
+          {
+            "protocols": ${protocols},
+            "os": "${os}",
+            "arch": "${arch}",
+            "filename": "${filename}",
+            "download_url": "https://github.com/${REPO}/releases/download/${tag}/${filename}",
+            "shasums_url": "https://github.com/${REPO}/releases/download/${tag}/terraform-provider-${NAME}_${tag#v}_SHA256SUMS",
+            "shasums_signature_url": "https://github.com/${REPO}/releases/download/${tag}/terraform-provider-${NAME}_${tag#v}_SHA256SUMS.sig",
+            "shasum": "$(sha256sum ".assets/${filename}" | awk '{ print $1; }')",
+            "signing_keys": {
+              "gpg_public_keys": [
+                {
+                  "key_id": "${pgp_id}",
+                  "ascii_armor": ${pgp_armor},
+                  "trust_signature": "",
+                  "source": "${OWNER}",
+                  "source_url": "https://github.com/${REPO}/releases/download/${tag}/${pgp_source}"
+                }
+              ]
+            }
+          }
+          EOF
+
+                    jq-inplace platforms --slurpfile platform "download/${os}/${arch}" '. + [$platform | .[] | {os, arch}]'
+                    ;;
+                esac
+              done
+              jq-inplace ../versions --slurpfile platforms platforms --arg version "${tag#v}" --argjson protocols "$protocols" '.versions += [{ "version": $version, "protocols": $protocols, "platforms": $platforms[0]}]'
+              rm -rf .assets
+            )
+          done
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+      #- name: Build with Jekyll
+      #  uses: actions/jekyll-build-pages@v1
+      #  with:
+      #    source: .
+      #    destination: ./_site
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v2
+        with:
+          path: .
+
+  # Deployment job
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v2
