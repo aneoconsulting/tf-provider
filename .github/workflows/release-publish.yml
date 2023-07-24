@@ -1,0 +1,79 @@
+on:
+  workflow_call:
+    inputs:
+      name:
+        required: true
+        type : string
+      tag:
+        required: true
+        type : string
+    secrets:
+      PGP_PRIVATE_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      name:
+        required: true
+        type : string
+      tag:
+        required: true
+        type : string
+
+name: Release Publish
+
+env:
+  NAME: ${{ inputs.name }}
+  TAG: ${{ inputs.tag }}
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Download Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir release build
+          cd build
+          gh release download "${TAG}"
+      - name: Import PGP
+        run: |
+          echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --import
+      - name: Checksums
+        working-directory: release
+        run: |
+          set -ex
+          shasum -a 256 ../build/*.zip > "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
+          gpg --detach-sign "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
+      - name: Documentation
+        working-directory: docs
+        run: |
+          zip -r ../release/docs.zip .
+      - name: Release json
+        working-directory: release
+        run: |
+          pgp_id="$(gpg --with-colon -k | awk -F: '/^pub:/ { print $5 }')"
+          cat > release.json <<EOF
+          {
+            "name": "${NAME}",
+            "version": "${TAG#v}",
+            "pgp": {
+              "source": "lemaitre.pgp.pub",
+              "key_id": "$pgp_id",
+              "ascii_armor": "$(cat ../lemaitre.pgp.pub)"
+            }
+          }
+          EOF
+          cp ../lemaitre.pgp.pub .
+          cp ../manifest.json "terraform-provider-${NAME}_${TAG#v}_manifest.json"
+      - name: Upload Assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: release
+        run: |
+          gh release upload "${TAG}" *

@@ -7,7 +7,6 @@ name: Release
 env:
   NAME: cmd
   TAG: ${{ github.event.release.tag_name }}
-  RELEASE: ${{ github.event.release.name }}
 
 jobs:
   build:
@@ -76,48 +75,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         working-directory: release
         run: |
-          gh release upload "${RELEASE}" *
+          gh release upload "${TAG}" *
   publish:
-    name: Publish
     needs: build
     permissions:
       contents: write
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: Download Assets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir release
-          cd release
-          gh release download "${RELEASE}"
-      - name: Create Assets
-        run: |
-          set -ex
-          zip -r release/terraform-provider-${NAME}_${TAG#v}_docs.zip docs
-          cd release
-          echo "${{ secrets.PGP_PRIVATE_KEY }}" | gpg --import
-          pgp_id="$(gpg --with-colon -k | awk -F: '/^pub:/ { print $5 }')"
-          cat > release.json <<EOF
-          {
-            "name": "${NAME}",
-            "version": "${TAG#v}",
-            "pgp": {
-              "source": "lemaitre.pgp.pub",
-              "key_id": "$pgp_id",
-              "ascii_armor": "$(cat ../lemaitre.pgp.pub)"
-            }
-          }
-          EOF
-          shasum -a 256 *.zip > "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
-          rm *.zip
-          gpg --detach-sign "terraform-provider-${NAME}_${TAG#v}_SHA256SUMS"
-          cp ../manifest.json "terraform-provider-${NAME}_${TAG#v}_manifest.json"
-      - name: Upload Assets
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: release
-        run: |
-          gh release upload "${RELEASE}" *
+    uses: ./.github/workflows/release-publish.yml
+    with:
+      name: cmd
+      tag: ${{ github.event.release.tag_name }}
+    secrets: inherit
