@@ -121,15 +121,17 @@ pub async fn serve<U: ToString, V: DynamicProvider>(name: U, provider: V) -> Res
 
 pub async fn serve_dynamic(name: String, provider: Box<dyn DynamicProvider>) -> Result<()> {
     let server = Arc::new(Server::new(name, provider));
-    let log_file = File::create("cmd-trace.log")?;
     let addrs = SockAddrIter::new()?;
     let (tcp_stream, endpoint) = listen(addrs)?;
 
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .with_ansi(false)
-        .with_writer(Mutex::new(log_file))
-        .init();
+    if let Ok(path) = env::var("GENERIC_PROVIDER_LOG_FILE") {
+        let log_file = File::create(path)?;
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_ansi(false)
+            .with_writer(Mutex::new(log_file))
+            .init();
+    }
 
     let tls_config = TlsConfig::new()?;
 
