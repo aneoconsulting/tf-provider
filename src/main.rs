@@ -1,14 +1,14 @@
 use anyhow::Result;
-use cmd_provider::CmdProvider;
+use generic_provider::GenericProvider;
 use tf_provider::serve;
 
-mod cmd_exec;
-mod cmd_file;
-mod cmd_provider;
+mod cmd;
 mod connection;
+mod file;
+mod generic_provider;
 mod utils;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    serve("cmd", CmdProvider::default()).await
+    serve("generic", GenericProvider::default()).await
 }

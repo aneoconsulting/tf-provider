@@ -18,12 +18,12 @@ use super::hash_stream::DefaultHashingStream;
 use crate::connection::Connection;
 
 #[derive(Debug, Default)]
-pub struct CmdFileResource<T: Connection> {
+pub struct GenericFileResource<T: Connection> {
     pub(super) sensitive: bool,
     pub(super) connect: T,
 }
 
-impl<T: Connection> CmdFileResource<T> {
+impl<T: Connection> GenericFileResource<T> {
     pub fn new(sensitive: bool, connect: T) -> Self {
         Self { sensitive, connect }
     }
@@ -54,7 +54,7 @@ where
 }
 
 #[async_trait]
-impl<T> Resource for CmdFileResource<T>
+impl<T> Resource for GenericFileResource<T>
 where
     T: Connection,
     T: Debug,
@@ -403,7 +403,7 @@ where
     }
 }
 
-impl<T: Connection> CmdFileResource<T> {
+impl<T: Connection> GenericFileResource<T> {
     fn normalize(&self, state: &mut ResourceState<'_, T>) {
         if state.id.is_null() {
             state.id = Value::Unknown;

@@ -5,7 +5,7 @@ on:
 name: Test
 
 env:
-  NAME: cmd
+  NAME: generic
 
 jobs:
   build-and-release:
@@ -40,7 +40,7 @@ jobs:
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2.2.1
         with:
-          shared-key: "cmdrs-build-${{ matrix.job.target }}"
+          shared-key: "build-${{ matrix.job.target }}"
       - name: Build
         uses: actions-rs/cargo@v1
         with:

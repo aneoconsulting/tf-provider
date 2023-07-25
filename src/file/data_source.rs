@@ -11,15 +11,15 @@ use tf_provider::{
     Description, Diagnostics, NestedBlock, Schema, Value, ValueEmpty, ValueString,
 };
 
-use crate::{cmd_file::hash_stream::DefaultHashingStream, connection::Connection};
+use crate::{connection::Connection, file::hash_stream::DefaultHashingStream};
 
 #[derive(Debug, Default)]
-pub struct CmdFileDataSource<T: Connection> {
+pub struct GenericFileDataSource<T: Connection> {
     pub(super) sensitive: bool,
     pub(super) connect: T,
 }
 
-impl<T: Connection> CmdFileDataSource<T> {
+impl<T: Connection> GenericFileDataSource<T> {
     pub fn new(sensitive: bool, connect: T) -> Self {
         Self { sensitive, connect }
     }
@@ -45,7 +45,7 @@ where
 }
 
 #[async_trait]
-impl<T> DataSource for CmdFileDataSource<T>
+impl<T> DataSource for GenericFileDataSource<T>
 where
     T: Connection,
     T: Debug,

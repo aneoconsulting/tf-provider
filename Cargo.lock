@@ -1841,7 +1841,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "terraform-provider-cmd"
+name = "terraform-provider-generic"
 version = "0.1.0"
 dependencies = [
  "anyhow",

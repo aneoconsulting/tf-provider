@@ -1,20 +1,20 @@
 terraform {
   required_providers {
-    cmd = {
-      source  = "lemaitre.re/lemaitre/cmd"
+    generic = {
+      source  = "lemaitre.github.io/lemaitre/generic"
       version = ">= 0.1.0"
     }
   }
 }
 
-provider "cmd" {
+provider "generic" {
 }
 
 resource "null_resource" "pouet" {
 
 }
 
-resource "cmd_ssh_exec" "test" {
+resource "generic_ssh_cmd" "test" {
   connect {
     host    = "10.42.0.2"
     user    = "dummy-user"
@@ -60,9 +60,9 @@ resource "cmd_ssh_exec" "test" {
   }
 }
 
-data "cmd_local_exec" "pouet" {
+data "generic_local_cmd" "pouet" {
   inputs = {
-    a = cmd_ssh_exec.test.state.pouet
+    a = generic_ssh_cmd.test.state.pouet
   }
 
   read "a" {
@@ -70,7 +70,7 @@ data "cmd_local_exec" "pouet" {
   }
 }
 
-data "cmd_ssh_file" "pouet" {
+data "generic_ssh_file" "pouet" {
   connect {
     host    = "10.42.0.2"
     user    = "dummy-user"
@@ -79,7 +79,7 @@ data "cmd_ssh_file" "pouet" {
   path = "/etc/resolv.conf"
 }
 
-resource "cmd_ssh_file" "plop" {
+resource "generic_ssh_file" "plop" {
   connect {
     host    = "10.42.0.2"
     user    = "dummy-user"
@@ -92,20 +92,20 @@ resource "cmd_ssh_file" "plop" {
 
 output "exec" {
   value = {
-    inputs  = cmd_ssh_exec.test.inputs
-    outputs = cmd_ssh_exec.test.state
+    inputs  = generic_ssh_cmd.test.inputs
+    outputs = generic_ssh_cmd.test.state
   }
 }
-output "data_exec" {
+output "data_cmd" {
   value = {
-    inputs  = data.cmd_local_exec.pouet.inputs
-    outputs = data.cmd_local_exec.pouet.outputs
+    inputs  = data.generic_local_cmd.pouet.inputs
+    outputs = data.generic_local_cmd.pouet.outputs
   }
 }
 
 output "datafile" {
-  value = data.cmd_ssh_file.pouet
+  value = data.generic_ssh_file.pouet
 }
 output "file" {
-  value = cmd_ssh_file.plop
+  value = generic_ssh_file.plop
 }

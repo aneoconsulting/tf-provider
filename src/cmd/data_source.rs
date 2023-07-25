@@ -11,18 +11,18 @@ use super::prepare_envs;
 use super::state::DataSourceState;
 
 #[derive(Debug, Default)]
-pub struct CmdExecDataSource<T: Connection> {
+pub struct GenericCmdDataSource<T: Connection> {
     pub(super) connect: T,
 }
 
-impl<T: Connection> CmdExecDataSource<T> {
+impl<T: Connection> GenericCmdDataSource<T> {
     pub fn new(connect: T) -> Self {
         Self { connect }
     }
 }
 
 #[async_trait]
-impl<T> DataSource for CmdExecDataSource<T>
+impl<T> DataSource for GenericCmdDataSource<T>
 where
     T: Connection,
     T: Debug,

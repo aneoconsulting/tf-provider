@@ -7,7 +7,7 @@ use crate::utils::DisplayJoinable;
 
 use super::{
     state::{DataSourceState, ResourceState, StateUpdate},
-    CmdExecDataSource,
+    GenericCmdDataSource,
 };
 
 impl super::state::StateCmd<'_> {
@@ -80,7 +80,7 @@ impl super::state::StateUpdate<'_> {
     }
 }
 
-impl<T: Connection> super::resource::CmdExecResource<T> {
+impl<T: Connection> super::resource::GenericCmdResource<T> {
     pub(super) async fn validate<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -172,7 +172,7 @@ impl<T: Connection> super::resource::CmdExecResource<T> {
     }
 }
 
-impl<T: Connection> CmdExecDataSource<T> {
+impl<T: Connection> GenericCmdDataSource<T> {
     pub(super) async fn validate<'a>(
         &self,
         diags: &mut Diagnostics,

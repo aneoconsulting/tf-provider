@@ -18,18 +18,18 @@ use super::state::{ResourceState, StateUpdate};
 use super::{prepare_envs, with_env};
 
 #[derive(Debug, Default)]
-pub struct CmdExecResource<T: Connection> {
+pub struct GenericCmdResource<T: Connection> {
     pub(super) connect: T,
 }
 
-impl<T: Connection> CmdExecResource<T> {
+impl<T: Connection> GenericCmdResource<T> {
     pub fn new(connect: T) -> Self {
         Self { connect }
     }
 }
 
 #[async_trait]
-impl<T> Resource for CmdExecResource<T>
+impl<T> Resource for GenericCmdResource<T>
 where
     T: Connection,
     T: Debug,

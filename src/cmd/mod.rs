@@ -9,8 +9,8 @@ mod resource;
 mod state;
 mod validate;
 
-pub use data_source::CmdExecDataSource;
-pub use resource::CmdExecResource;
+pub use data_source::GenericCmdDataSource;
+pub use resource::GenericCmdResource;
 
 fn prepare_envs<'a>(
     envs: &[(&'a ValueMap<'a, ValueString<'a>>, &'a str)],

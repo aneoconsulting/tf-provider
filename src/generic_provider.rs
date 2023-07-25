@@ -3,16 +3,16 @@ use async_trait::async_trait;
 use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
 use crate::{
-    cmd_exec::{CmdExecDataSource, CmdExecResource},
-    cmd_file::{CmdFileDataSource, CmdFileResource},
+    cmd::{GenericCmdDataSource, GenericCmdResource},
     connection::{local::ConnectionLocal, ssh::ConnectionSsh},
+    file::{GenericFileDataSource, GenericFileResource},
 };
 
 #[derive(Debug, Default, Clone)]
-pub struct CmdProvider {}
+pub struct GenericProvider {}
 
 #[async_trait]
-impl Provider for CmdProvider {
+impl Provider for GenericProvider {
     type Config<'a> = ValueEmpty;
     type MetaState<'a> = ValueEmpty;
 
@@ -20,7 +20,7 @@ impl Provider for CmdProvider {
         Some(Schema {
             version: 1,
             block: Block {
-                description: Description::plain("cmd"),
+                description: Description::plain("generic"),
                 ..Default::default()
             },
         })
@@ -49,12 +49,12 @@ impl Provider for CmdProvider {
     ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::resource::DynamicResource>>>
     {
         Some(map! {
-            "local_exec" => CmdExecResource::new(ConnectionLocal::default()),
-            "ssh_exec"   => CmdExecResource::new(ConnectionSsh::default()),
-            "local_file" => CmdFileResource::new(false, ConnectionLocal::default()),
-            "ssh_file"   => CmdFileResource::new(false, ConnectionSsh::default()),
-            "local_sensitive_file" => CmdFileResource::new(true, ConnectionLocal::default()),
-            "ssh_sensitive_file"   => CmdFileResource::new(true, ConnectionSsh::default()),
+            "local_cmd" => GenericCmdResource::new(ConnectionLocal::default()),
+            "ssh_cmd"   => GenericCmdResource::new(ConnectionSsh::default()),
+            "local_file" => GenericFileResource::new(false, ConnectionLocal::default()),
+            "ssh_file"   => GenericFileResource::new(false, ConnectionSsh::default()),
+            "local_sensitive_file" => GenericFileResource::new(true, ConnectionLocal::default()),
+            "ssh_sensitive_file"   => GenericFileResource::new(true, ConnectionSsh::default()),
         })
     }
 
@@ -65,12 +65,12 @@ impl Provider for CmdProvider {
         std::collections::HashMap<String, Box<dyn tf_provider::data_source::DynamicDataSource>>,
     > {
         Some(map! {
-            "local_exec" => CmdExecDataSource::new(ConnectionLocal::default()),
-            "ssh_exec"   => CmdExecDataSource::new(ConnectionSsh::default()),
-            "local_file" => CmdFileDataSource::new(false, ConnectionLocal::default()),
-            "ssh_file"   => CmdFileDataSource::new(false, ConnectionSsh::default()),
-            "local_sensitive_file" => CmdFileDataSource::new(true, ConnectionLocal::default()),
-            "ssh_sensitive_file"   => CmdFileDataSource::new(true, ConnectionSsh::default()),
+            "local_cmd" => GenericCmdDataSource::new(ConnectionLocal::default()),
+            "ssh_cmd"   => GenericCmdDataSource::new(ConnectionSsh::default()),
+            "local_file" => GenericFileDataSource::new(false, ConnectionLocal::default()),
+            "ssh_file"   => GenericFileDataSource::new(false, ConnectionSsh::default()),
+            "local_sensitive_file" => GenericFileDataSource::new(true, ConnectionLocal::default()),
+            "ssh_sensitive_file"   => GenericFileDataSource::new(true, ConnectionSsh::default()),
         })
     }
 }
