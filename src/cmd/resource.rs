@@ -75,7 +75,7 @@ where
                 .collect(),
         );
 
-        state.read(diags, &self.connect, &state_env).await;
+        state.read(diags, &self.connect, &state_env, true).await;
 
         Some((state, private_state))
     }
@@ -263,7 +263,7 @@ where
             return None;
         }
 
-        state.read(diags, &self.connect, &state_env).await;
+        state.read(diags, &self.connect, &state_env, false).await;
 
         Some((state, planned_private_state))
     }
@@ -350,7 +350,7 @@ where
             }
         }
 
-        state.read(diags, &self.connect, &state_env).await;
+        state.read(diags, &self.connect, &state_env, false).await;
 
         Some((state, planned_private_state))
     }

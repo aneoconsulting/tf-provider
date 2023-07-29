@@ -53,8 +53,8 @@ resource "generic_ssh_cmd" "test" {
   }
 
   read "plop" {
-    cmd = "echo plop"
-
+    cmd       = "false"
+    faillible = true
   }
   read "pouet" {
     cmd = "echo -n pouet"

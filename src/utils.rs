@@ -33,11 +33,15 @@ impl<T: WithCmd> WithCmd for Value<T> {
 
 pub(crate) trait WithRead: WithCmd {
     fn strip_trailing_newline(&self) -> bool;
+    fn faillible(&self) -> bool;
 }
 
 impl<T: WithRead> WithRead for Value<T> {
     fn strip_trailing_newline(&self) -> bool {
         self.as_ref().map_or(true, WithRead::strip_trailing_newline)
+    }
+    fn faillible(&self) -> bool {
+        self.as_ref().map_or(true, WithRead::faillible)
     }
 }
 

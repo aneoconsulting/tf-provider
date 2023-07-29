@@ -19,6 +19,7 @@ impl<'a, T: Connection> ResourceState<'a, T> {
         diags: &mut Diagnostics,
         connect: &T,
         env: &[(Cow<'b, str>, Cow<'b, str>)],
+        faillibe: bool,
     ) -> Option<()> {
         read_all(
             diags,
@@ -27,6 +28,7 @@ impl<'a, T: Connection> ResourceState<'a, T> {
             &self.read,
             &mut self.state,
             env,
+            faillibe,
             self.command_concurrency,
         )
         .await
@@ -47,12 +49,14 @@ impl<'a, T: Connection> DataSourceState<'a, T> {
             &self.read,
             &mut self.outputs,
             env,
+            false,
             self.command_concurrency,
         )
         .await
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn read_all<'a, 'b, C, R>(
     diags: &mut Diagnostics,
     connect: &C,
@@ -60,6 +64,7 @@ async fn read_all<'a, 'b, C, R>(
     reads: &ValueMap<'a, Value<R>>,
     outputs: &mut ValueMap<'a, ValueString<'a>>,
     env: &[(Cow<'b, str>, Cow<'b, str>)],
+    faillibe: bool,
     concurrency: ValueNumber,
 ) -> Option<()>
 where
@@ -85,13 +90,18 @@ where
         if let Some(Value::Value(read)) = reads.get(name) {
             let cmd = read.cmd();
             let dir = read.dir();
-            let strip_trailing_newline = read.strip_trailing_newline();
 
             read_tasks.push(async move {
                 let result = connect
                     .execute(connect_config, cmd, dir, with_env(env, read.env()))
                     .await;
-                (name, value, strip_trailing_newline, result)
+                (
+                    name,
+                    value,
+                    faillibe || read.faillible(),
+                    read.strip_trailing_newline(),
+                    result,
+                )
             });
         } else {
             diags.error(
@@ -102,14 +112,21 @@ where
         }
     }
 
-    for (name, value, strip_trailing_newline, result) in stream::iter(read_tasks.into_iter())
-        .buffer_unordered(concurrency)
-        .collect::<Vec<_>>()
-        .await
+    for (name, value, faillible, strip_trailing_newline, result) in
+        stream::iter(read_tasks.into_iter())
+            .buffer_unordered(concurrency)
+            .collect::<Vec<_>>()
+            .await
     {
         let attr_path = AttributePath::new("read")
             .key(name.to_string())
             .attribute("cmd");
+        *value = Value::Null;
+        let report: fn(&mut Diagnostics, String, String, AttributePath) = if faillible {
+            Diagnostics::warning
+        } else {
+            Diagnostics::error
+        };
         match result {
             Ok(res) => {
                 if res.status == 0 {
@@ -134,7 +151,8 @@ where
 
                     *value = Value::Value(stdout);
                 } else {
-                    diags.warning(
+                    report(
+                        diags,
                         format!("`read` failed with status code: {}", res.status),
                         res.stderr,
                         attr_path,
@@ -142,7 +160,12 @@ where
                 }
             }
             Err(err) => {
-                diags.warning("Failed to read resource state", err.to_string(), attr_path);
+                report(
+                    diags,
+                    "Failed to read resource state".to_string(),
+                    err.to_string(),
+                    attr_path,
+                );
             }
         }
     }

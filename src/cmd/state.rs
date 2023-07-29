@@ -69,6 +69,7 @@ pub struct StateRead<'a> {
     #[serde(borrow = "'a")]
     #[serde(flatten)]
     pub cmd: StateCmd<'a>,
+    pub faillible: ValueBool,
     pub strip_trailing_newline: ValueBool,
 }
 
@@ -94,6 +95,31 @@ lazy_static! {
         constraint: AttributeConstraint::Optional,
         ..Default::default()
     };
+    static ref READ_BLOCK: NestedBlock = NestedBlock::Map(Block {
+        attributes: map! {
+            "cmd" => CMD_ATTRIBUTE.clone(),
+            "dir" => DIR_ATTRIBUTE.clone(),
+            "env" => ENV_ATTRIBUTE.clone(),
+            "faillible" => Attribute {
+                attr_type: AttributeType::Bool,
+                description: Description::plain(
+                    "Whether a command should be a hard error",
+                ),
+                constraint: AttributeConstraint::Optional,
+                ..Default::default()
+            },
+            "strip_trailing_newline" => Attribute {
+                attr_type: AttributeType::Bool,
+                description: Description::plain(
+                    "When enabled, remove the trailing newline if present",
+                ),
+                constraint: AttributeConstraint::Optional,
+                ..Default::default()
+            },
+        },
+        description: Description::plain("Command to execute to get the value of the output",),
+        ..Default::default()
+    });
 }
 
 impl<'a, T> WithSchema for ResourceState<'a, T>
@@ -132,25 +158,7 @@ where
                     },
                 },
                 blocks: map! {
-                    "read" => NestedBlock::Map(Block {
-                        attributes: map! {
-                            "cmd" => CMD_ATTRIBUTE.clone(),
-                            "dir" => DIR_ATTRIBUTE.clone(),
-                            "env" => ENV_ATTRIBUTE.clone(),
-                            "strip_trailing_newline" => Attribute {
-                                attr_type: AttributeType::Bool,
-                                description: Description::plain(
-                                    "When enabled, remove the trailing newline if present",
-                                ),
-                                constraint: AttributeConstraint::Optional,
-                                ..Default::default()
-                            },
-                        },
-                        description: Description::plain(
-                            "Command to execute to get the value of the output",
-                        ),
-                        ..Default::default()
-                    }),
+                    "read" => READ_BLOCK.clone(),
                     "create" => NestedBlock::Optional(Block {
                         attributes: map! {
                             "cmd" => CMD_ATTRIBUTE.clone(),
@@ -243,25 +251,7 @@ where
                     },
                 },
                 blocks: map! {
-                    "read" => NestedBlock::Map(Block {
-                        attributes: map! {
-                            "cmd" => CMD_ATTRIBUTE.clone(),
-                            "dir" => DIR_ATTRIBUTE.clone(),
-                            "env" => ENV_ATTRIBUTE.clone(),
-                            "strip_trailing_newline" => Attribute {
-                                attr_type: AttributeType::Bool,
-                                description: Description::plain(
-                                    "When enabled, remove the trailing newline if present",
-                                ),
-                                constraint: AttributeConstraint::Optional,
-                                ..Default::default()
-                            },
-                        },
-                        description: Description::plain(
-                            "Command to execute to get the value of the output",
-                        ),
-                        ..Default::default()
-                    }),
+                    "read" => READ_BLOCK.clone(),
                     "connect" => NestedBlock::Optional(Block {
                         attributes: T::schema(),
                         description: Description::plain("Connection information"),
@@ -303,6 +293,9 @@ impl<'a> WithCmd for StateRead<'a> {
 impl<'a> WithRead for StateRead<'a> {
     fn strip_trailing_newline(&self) -> bool {
         self.strip_trailing_newline.unwrap_or(true)
+    }
+    fn faillible(&self) -> bool {
+        self.faillible.unwrap_or(false)
     }
 }
 
