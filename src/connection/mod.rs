@@ -28,6 +28,7 @@ pub trait Connection: Send + Sync + 'static + Default {
         &self,
         config: &Self::Config<'a>,
         cmd: &str,
+        dir: &str,
         env: I,
     ) -> Result<ExecutionResult>
     where

@@ -1,3 +1,4 @@
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
 use tf_provider::{
@@ -50,6 +51,7 @@ where
 pub struct StateCmd<'a> {
     #[serde(borrow = "'a")]
     pub cmd: ValueString<'a>,
+    pub dir: ValueString<'a>,
     pub env: ValueMap<'a, ValueString<'a>>,
 }
 
@@ -73,23 +75,32 @@ pub struct StateRead<'a> {
 pub type StateCreate<'a> = StateCmd<'a>;
 pub type StateDestroy<'a> = StateCmd<'a>;
 
+lazy_static! {
+    static ref CMD_ATTRIBUTE: Attribute = Attribute {
+        attr_type: AttributeType::String,
+        description: Description::plain("Command to execute when reading the attribute"),
+        constraint: AttributeConstraint::Required,
+        ..Default::default()
+    };
+    static ref DIR_ATTRIBUTE: Attribute = Attribute {
+        attr_type: AttributeType::String,
+        description: Description::plain("Directory where the command will be executed"),
+        constraint: AttributeConstraint::Optional,
+        ..Default::default()
+    };
+    static ref ENV_ATTRIBUTE: Attribute = Attribute {
+        attr_type: AttributeType::Map(AttributeType::String.into()),
+        description: Description::plain("Environment used to execute the command"),
+        constraint: AttributeConstraint::Optional,
+        ..Default::default()
+    };
+}
+
 impl<'a, T> WithSchema for ResourceState<'a, T>
 where
     T: Connection,
 {
     fn schema() -> Schema {
-        let cmd_attribute = Attribute {
-            attr_type: AttributeType::String,
-            description: Description::plain("Command to execute when reading the attribute"),
-            constraint: AttributeConstraint::Required,
-            ..Default::default()
-        };
-        let env_attribute = Attribute {
-            attr_type: AttributeType::Map(AttributeType::String.into()),
-            description: Description::plain("Environment used to execute the command"),
-            constraint: AttributeConstraint::Optional,
-            ..Default::default()
-        };
         Schema {
             version: 1,
             block: Block {
@@ -123,8 +134,9 @@ where
                 blocks: map! {
                     "read" => NestedBlock::Map(Block {
                         attributes: map! {
-                            "cmd" => cmd_attribute.clone(),
-                            "env" => env_attribute.clone(),
+                            "cmd" => CMD_ATTRIBUTE.clone(),
+                            "dir" => DIR_ATTRIBUTE.clone(),
+                            "env" => ENV_ATTRIBUTE.clone(),
                             "strip_trailing_newline" => Attribute {
                                 attr_type: AttributeType::Bool,
                                 description: Description::plain(
@@ -141,8 +153,9 @@ where
                     }),
                     "create" => NestedBlock::Optional(Block {
                         attributes: map! {
-                            "cmd" => cmd_attribute.clone(),
-                            "env" => env_attribute.clone(),
+                            "cmd" => CMD_ATTRIBUTE.clone(),
+                            "dir" => DIR_ATTRIBUTE.clone(),
+                            "env" => ENV_ATTRIBUTE.clone(),
                         },
                         description: Description::plain(
                             "Command to execute to create the resource",
@@ -151,8 +164,9 @@ where
                     }),
                     "destroy" => NestedBlock::Optional(Block {
                         attributes: map! {
-                            "cmd" => cmd_attribute.clone(),
-                            "env" => env_attribute.clone(),
+                            "cmd" => CMD_ATTRIBUTE.clone(),
+                            "dir" => DIR_ATTRIBUTE.clone(),
+                            "env" => ENV_ATTRIBUTE.clone(),
                         },
                         description: Description::plain(
                             "Command to execute to destroy the resource",
@@ -161,8 +175,9 @@ where
                     }),
                     "update" => NestedBlock::Set(Block {
                         attributes: map! {
-                            "cmd" => cmd_attribute,
-                            "env" => env_attribute,
+                            "cmd" => CMD_ATTRIBUTE.clone(),
+                            "dir" => DIR_ATTRIBUTE.clone(),
+                            "env" => ENV_ATTRIBUTE.clone(),
                             "triggers" => Attribute {
                                 attr_type: AttributeType::Set(AttributeType::String.into()),
                                 description: Description::plain(
@@ -230,18 +245,9 @@ where
                 blocks: map! {
                     "read" => NestedBlock::Map(Block {
                         attributes: map! {
-                            "cmd" => Attribute {
-                                attr_type: AttributeType::String,
-                                description: Description::plain("Command to execute when reading the attribute"),
-                                constraint: AttributeConstraint::Required,
-                                ..Default::default()
-                            },
-                            "env" => Attribute {
-                                attr_type: AttributeType::Map(AttributeType::String.into()),
-                                description: Description::plain("Environment used to execute the command"),
-                                constraint: AttributeConstraint::Optional,
-                                ..Default::default()
-                            },
+                            "cmd" => CMD_ATTRIBUTE.clone(),
+                            "dir" => DIR_ATTRIBUTE.clone(),
+                            "env" => ENV_ATTRIBUTE.clone(),
                             "strip_trailing_newline" => Attribute {
                                 attr_type: AttributeType::Bool,
                                 description: Description::plain(
@@ -273,15 +279,25 @@ impl<'a> WithCmd for StateCmd<'a> {
     fn cmd(&self) -> &str {
         self.cmd.as_str()
     }
+
+    fn dir(&self) -> &str {
+        self.dir.as_str()
+    }
 }
 impl<'a> WithCmd for StateUpdate<'a> {
     fn cmd(&self) -> &str {
         self.cmd.cmd()
     }
+    fn dir(&self) -> &str {
+        self.cmd.dir()
+    }
 }
 impl<'a> WithCmd for StateRead<'a> {
     fn cmd(&self) -> &str {
         self.cmd.cmd()
+    }
+    fn dir(&self) -> &str {
+        self.cmd.dir()
     }
 }
 impl<'a> WithRead for StateRead<'a> {

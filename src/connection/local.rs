@@ -36,6 +36,7 @@ impl Connection for ConnectionLocal {
         &self,
         _config: &Self::Config<'a>,
         cmd: &str,
+        dir: &str,
         env: I,
     ) -> Result<ExecutionResult>
     where
@@ -47,6 +48,10 @@ impl Connection for ConnectionLocal {
     {
         if !cmd.is_empty() {
             let mut command = Command::new("sh");
+            eprintln!("Workdir: {dir}");
+            if !dir.is_empty() {
+                command.current_dir(dir);
+            }
             command.arg("-c").arg(cmd);
             for (k, v) in env {
                 command.env(k.as_ref(), v.as_ref());

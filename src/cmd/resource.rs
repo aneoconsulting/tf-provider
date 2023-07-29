@@ -216,6 +216,7 @@ where
         let state_env = prepare_envs(&[(&planned_state.inputs, "INPUT_")]);
 
         let create_cmd = state.create.cmd();
+        let create_dir = state.create.dir();
         if !create_cmd.is_empty() {
             let attr_path = AttributePath::new("create").index(0).attribute("cmd");
             match self
@@ -223,6 +224,7 @@ where
                 .execute(
                     connection,
                     create_cmd,
+                    create_dir,
                     with_env(&state_env, state.create.env()),
                 )
                 .await
@@ -302,10 +304,16 @@ where
         if let Some((update, attr_path)) = find_update(&planned_state.update, &modified) {
             let attr_path = attr_path.attribute("cmd");
             let update_cmd = update.cmd();
+            let update_dir = update.dir();
             if !update_cmd.is_empty() {
                 match self
                     .connect
-                    .execute(connection, update_cmd, with_env(&state_env, update.env()))
+                    .execute(
+                        connection,
+                        update_cmd,
+                        update_dir,
+                        with_env(&state_env, update.env()),
+                    )
                     .await
                 {
                     Ok(res) => {
@@ -358,6 +366,7 @@ where
         let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
 
         let destroy_cmd = state.destroy.cmd();
+        let destroy_dir = state.destroy.dir();
         if !destroy_cmd.is_empty() {
             let attr_path = AttributePath::new("destroy").index(0).attribute("cmd");
             match self
@@ -365,6 +374,7 @@ where
                 .execute(
                     connection,
                     destroy_cmd,
+                    destroy_dir,
                     with_env(&state_env, state.destroy.env()),
                 )
                 .await

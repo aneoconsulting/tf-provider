@@ -19,11 +19,15 @@ pub(crate) trait WithNormalize {
 
 pub(crate) trait WithCmd {
     fn cmd(&self) -> &str;
+    fn dir(&self) -> &str;
 }
 
 impl<T: WithCmd> WithCmd for Value<T> {
     fn cmd(&self) -> &str {
         self.as_ref().map_or("", WithCmd::cmd)
+    }
+    fn dir(&self) -> &str {
+        self.as_ref().map_or("", WithCmd::dir)
     }
 }
 

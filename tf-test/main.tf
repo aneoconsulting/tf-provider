@@ -53,13 +53,15 @@ resource "generic_ssh_cmd" "test" {
   }
 
   read "plop" {
-    cmd                    = "echo plop"
-    strip_trailing_newline = true
+    cmd = "echo plop"
 
   }
   read "pouet" {
-    cmd                    = "echo -n pouet"
-    strip_trailing_newline = true
+    cmd = "echo -n pouet"
+  }
+  read "resolv" {
+    cmd = "cat resolv.conf"
+    dir = "/etc"
   }
 }
 
@@ -69,7 +71,8 @@ data "generic_local_cmd" "pouet" {
   }
 
   read "a" {
-    cmd = "echo -n a"
+    cmd = "cat resolv.conf"
+    dir = "/etc"
   }
 }
 

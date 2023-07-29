@@ -83,6 +83,7 @@ impl Connection for ConnectionSsh {
         &self,
         config: &Self::Config<'a>,
         cmd: &str,
+        dir: &str,
         env: I,
     ) -> Result<ExecutionResult>
     where
@@ -95,7 +96,7 @@ impl Connection for ConnectionSsh {
         _ = env;
 
         let client = self.get_client(config).await?;
-        let result = client.execute(cmd, env).await?;
+        let result = client.execute(cmd, dir, env).await?;
         Ok(result)
     }
 

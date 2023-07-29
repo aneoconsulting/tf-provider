@@ -12,6 +12,9 @@ use super::{
 
 impl super::state::StateCmd<'_> {
     async fn validate(&self, diags: &mut Diagnostics, mut attr_path: AttributePath) {
+        if self.dir.is_unknown() {
+            diags.warning("`dir` is not known during planning", "It is recommended that the command does not depend on any resource, and use variables instead.", attr_path.clone().attribute("dir"));
+        }
         attr_path.add_attribute("cmd");
         match self.cmd.as_ref() {
             Value::Value(cmd) => {

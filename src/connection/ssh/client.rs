@@ -72,6 +72,7 @@ impl Client {
     pub(super) async fn execute<'a, I, K, V>(
         &self,
         command: &str,
+        dir: &str,
         env: I,
     ) -> Result<ExecutionResult>
     where
@@ -95,7 +96,17 @@ impl Client {
             ) -> Result<(), SendError<&'a str>> {
                 tx.send(msg).await
             }
+            // Helper to read input
             send(&tx, "newline='\n'\nread_stdin() {\nvalue=\nwhile IFS= read -r line; do\nvalue=\"$value$line$newline\"\ndone\nvalue=\"$value$line\"\n}\n").await?;
+
+            // Change dir
+            send(&tx, "read_stdin << '__!@#$END_OF_WORKDIR$#@!__'\n").await?;
+            if !dir.is_empty() {
+                send(&tx, dir).await?;
+            }
+            send(&tx, "\n__!@#$END_OF_WORKDIR$#@!__\nvalue=\"${value%%?}\"\n[ -z \"$value\" ] || cd \"$value\"\n").await?;
+
+            // Export env
             for (name, value) in env {
                 let value = value.as_ref();
                 send(&tx, "read_stdin << '__!@#$END_OF_VARIABLE$#@!__'\n").await?;
@@ -106,6 +117,8 @@ impl Client {
                 send(&tx, name.as_ref()).await?;
                 send(&tx, "=\"${value%%?}\"\n").await?;
             }
+
+            // Execute command
             send(
                 &tx,
                 "exec /usr/bin/env bash << '__!@#$END_OF_SCRIPT$#@!__'\n",

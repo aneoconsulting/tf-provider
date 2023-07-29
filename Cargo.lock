@@ -1852,6 +1852,7 @@ dependencies = [
  "futures",
  "futures-core",
  "futures-util",
+ "lazy_static",
  "rand 0.8.5",
  "rusftp",
  "russh",

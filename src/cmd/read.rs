@@ -84,11 +84,12 @@ where
         }
         if let Some(Value::Value(read)) = reads.get(name) {
             let cmd = read.cmd();
+            let dir = read.dir();
             let strip_trailing_newline = read.strip_trailing_newline();
 
             read_tasks.push(async move {
                 let result = connect
-                    .execute(connect_config, cmd, with_env(env, read.env()))
+                    .execute(connect_config, cmd, dir, with_env(env, read.env()))
                     .await;
                 (name, value, strip_trailing_newline, result)
             });
