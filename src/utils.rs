@@ -27,6 +27,16 @@ impl<T: WithCmd> WithCmd for Value<T> {
     }
 }
 
+pub(crate) trait WithRead: WithCmd {
+    fn strip_trailing_newline(&self) -> bool;
+}
+
+impl<T: WithRead> WithRead for Value<T> {
+    fn strip_trailing_newline(&self) -> bool {
+        self.as_ref().map_or(true, WithRead::strip_trailing_newline)
+    }
+}
+
 pub(crate) trait WithEnv {
     type Env;
     fn env(&self) -> &Self::Env;

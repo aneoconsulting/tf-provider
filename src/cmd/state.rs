@@ -1,13 +1,15 @@
 use serde::{Deserialize, Serialize};
 
 use tf_provider::{
-    map, value, Attribute, AttributeConstraint, AttributeType, Block, Description, NestedBlock,
-    Schema, Value, ValueList, ValueMap, ValueNumber, ValueSet, ValueString,
+    map,
+    value::{self, ValueBool},
+    Attribute, AttributeConstraint, AttributeType, Block, Description, NestedBlock, Schema, Value,
+    ValueList, ValueMap, ValueNumber, ValueSet, ValueString,
 };
 
 use crate::{
     connection::Connection,
-    utils::{WithCmd, WithEnv, WithSchema},
+    utils::{WithCmd, WithEnv, WithRead, WithSchema},
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -60,7 +62,14 @@ pub struct StateUpdate<'a> {
     pub reloads: ValueSet<ValueString<'a>>,
 }
 
-pub type StateRead<'a> = StateCmd<'a>;
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct StateRead<'a> {
+    #[serde(borrow = "'a")]
+    #[serde(flatten)]
+    pub cmd: StateCmd<'a>,
+    pub strip_trailing_newline: ValueBool,
+}
+
 pub type StateCreate<'a> = StateCmd<'a>;
 pub type StateDestroy<'a> = StateCmd<'a>;
 
@@ -116,6 +125,14 @@ where
                         attributes: map! {
                             "cmd" => cmd_attribute.clone(),
                             "env" => env_attribute.clone(),
+                            "strip_trailing_newline" => Attribute {
+                                attr_type: AttributeType::Bool,
+                                description: Description::plain(
+                                    "When enabled, remove the trailing newline if present",
+                                ),
+                                constraint: AttributeConstraint::Optional,
+                                ..Default::default()
+                            },
                         },
                         description: Description::plain(
                             "Command to execute to get the value of the output",
@@ -225,6 +242,14 @@ where
                                 constraint: AttributeConstraint::Optional,
                                 ..Default::default()
                             },
+                            "strip_trailing_newline" => Attribute {
+                                attr_type: AttributeType::Bool,
+                                description: Description::plain(
+                                    "When enabled, remove the trailing newline if present",
+                                ),
+                                constraint: AttributeConstraint::Optional,
+                                ..Default::default()
+                            },
                         },
                         description: Description::plain(
                             "Command to execute to get the value of the output",
@@ -254,6 +279,16 @@ impl<'a> WithCmd for StateUpdate<'a> {
         self.cmd.cmd()
     }
 }
+impl<'a> WithCmd for StateRead<'a> {
+    fn cmd(&self) -> &str {
+        self.cmd.cmd()
+    }
+}
+impl<'a> WithRead for StateRead<'a> {
+    fn strip_trailing_newline(&self) -> bool {
+        self.strip_trailing_newline.unwrap_or(true)
+    }
+}
 
 impl<'a> WithEnv for StateCmd<'a> {
     type Env = ValueMap<'a, ValueString<'a>>;
@@ -263,6 +298,13 @@ impl<'a> WithEnv for StateCmd<'a> {
     }
 }
 impl<'a> WithEnv for StateUpdate<'a> {
+    type Env = ValueMap<'a, ValueString<'a>>;
+
+    fn env(&self) -> &Self::Env {
+        &self.cmd.env
+    }
+}
+impl<'a> WithEnv for StateRead<'a> {
     type Env = ValueMap<'a, ValueString<'a>>;
 
     fn env(&self) -> &Self::Env {

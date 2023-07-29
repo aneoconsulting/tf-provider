@@ -1,8 +1,8 @@
 terraform {
   required_providers {
     generic = {
-      source  = "lemaitre.github.io/lemaitre/generic"
-      version = ">= 0.1.0"
+      source  = "localhost/lemaitre/generic"
+      version = "= 0.1.1"
     }
   }
 }
@@ -53,10 +53,13 @@ resource "generic_ssh_cmd" "test" {
   }
 
   read "plop" {
-    cmd = "echo -n plop"
+    cmd                    = "echo plop"
+    strip_trailing_newline = true
+
   }
   read "pouet" {
-    cmd = "echo -n pouet"
+    cmd                    = "echo -n pouet"
+    strip_trailing_newline = true
   }
 }
 

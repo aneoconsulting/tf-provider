@@ -121,7 +121,8 @@ impl<T: Connection> super::resource::GenericCmdResource<T> {
                 let attr_path = attr_path.clone().attribute("read");
                 for (name, read) in read {
                     if let Value::Value(read) = read {
-                        read.validate(diags, attr_path.clone().key(name.to_string()))
+                        read.cmd
+                            .validate(diags, attr_path.clone().key(name.to_string()))
                             .await;
                     }
                 }
@@ -204,7 +205,8 @@ impl<T: Connection> GenericCmdDataSource<T> {
                 let attr_path = AttributePath::new("read");
                 for (name, read) in read {
                     if let Value::Value(read) = read {
-                        read.validate(diags, attr_path.clone().key(name.to_string()))
+                        read.cmd
+                            .validate(diags, attr_path.clone().key(name.to_string()))
                             .await;
                     }
                 }

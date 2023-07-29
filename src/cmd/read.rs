@@ -5,7 +5,7 @@ use tf_provider::{AttributePath, Diagnostics, Value, ValueMap, ValueNumber, Valu
 
 use crate::{
     connection::Connection,
-    utils::{WithCmd, WithEnv},
+    utils::{WithEnv, WithRead},
 };
 
 use super::{
@@ -64,7 +64,7 @@ async fn read_all<'a, 'b, C, R>(
 ) -> Option<()>
 where
     C: Connection,
-    R: WithCmd + WithEnv<Env = ValueMap<'a, ValueString<'a>>>,
+    R: WithRead + WithEnv<Env = ValueMap<'a, ValueString<'a>>>,
 {
     let outputs = outputs.as_mut_option()?;
 
@@ -84,12 +84,13 @@ where
         }
         if let Some(Value::Value(read)) = reads.get(name) {
             let cmd = read.cmd();
+            let strip_trailing_newline = read.strip_trailing_newline();
 
             read_tasks.push(async move {
                 let result = connect
                     .execute(connect_config, cmd, with_env(env, read.env()))
                     .await;
-                (name, (value), result)
+                (name, value, strip_trailing_newline, result)
             });
         } else {
             diags.error(
@@ -100,7 +101,7 @@ where
         }
     }
 
-    for (name, value, result) in stream::iter(read_tasks.into_iter())
+    for (name, value, strip_trailing_newline, result) in stream::iter(read_tasks.into_iter())
         .buffer_unordered(concurrency)
         .collect::<Vec<_>>()
         .await
@@ -118,8 +119,19 @@ where
                             attr_path,
                         );
                     }
+                    let mut stdout: Cow<'_, _> = res.stdout.into();
 
-                    *value = Value::Value(res.stdout.into());
+                    if strip_trailing_newline && stdout.as_bytes()[stdout.len() - 1] == b'\n' {
+                        stdout = match stdout {
+                            Cow::Borrowed(s) => Cow::Borrowed(&s[0..s.len() - 1]),
+                            Cow::Owned(mut s) => {
+                                s.pop();
+                                Cow::Owned(s)
+                            }
+                        }
+                    }
+
+                    *value = Value::Value(stdout);
                 } else {
                     diags.warning(
                         format!("`read` failed with status code: {}", res.status),

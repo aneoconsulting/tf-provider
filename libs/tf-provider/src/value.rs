@@ -52,6 +52,7 @@ pub struct StructEmpty {}
 pub type ValueEmpty = Value<StructEmpty>;
 pub type ValueString<'a> = Value<Cow<'a, str>>;
 pub type ValueNumber = Value<i64>;
+pub type ValueBool = Value<bool>;
 pub type ValueList<T> = Value<Vec<T>>;
 pub type ValueSet<T> = Value<BTreeSet<T>>;
 pub type ValueMap<'a, T> = Value<BTreeMap<Cow<'a, str>, T>>;
