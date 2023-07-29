@@ -55,6 +55,7 @@ Required:
 
 Optional:
 
+- `dir` (String) Directory where the command will be executed
 - `env` (Map of String) Environment used to execute the command
 
 
@@ -67,6 +68,7 @@ Required:
 
 Optional:
 
+- `dir` (String) Directory where the command will be executed
 - `env` (Map of String) Environment used to execute the command
 
 
@@ -79,7 +81,10 @@ Required:
 
 Optional:
 
+- `dir` (String) Directory where the command will be executed
 - `env` (Map of String) Environment used to execute the command
+- `faillible` (Boolean) Whether a command should be a hard error
+- `strip_trailing_newline` (Boolean) When enabled, remove the trailing newline if present
 
 
 <a id="nestedblock--update"></a>
@@ -91,6 +96,7 @@ Required:
 
 Optional:
 
+- `dir` (String) Directory where the command will be executed
 - `env` (Map of String) Environment used to execute the command
 - `reloads` (Set of String) What outputs should be read again after this update
 - `triggers` (Set of String) What input changes should trigger this update

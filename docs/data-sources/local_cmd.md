@@ -39,4 +39,7 @@ Required:
 
 Optional:
 
+- `dir` (String) Directory where the command will be executed
 - `env` (Map of String) Environment used to execute the command
+- `faillible` (Boolean) Whether a command should be a hard error
+- `strip_trailing_newline` (Boolean) When enabled, remove the trailing newline if present
