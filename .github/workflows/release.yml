@@ -107,3 +107,15 @@ jobs:
     with:
       name: generic
     secrets: inherit
+  failure:
+    needs: [build, check-version, gh-pages, publish]
+    if: cancelled() || failure()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Remove tag
+        run: |
+          git push --delete origin "$TAG"
