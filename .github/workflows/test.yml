@@ -1,6 +1,8 @@
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 name: Test
 
@@ -8,6 +10,12 @@ env:
   NAME: generic
 
 jobs:
+  dump-ctx:
+    name: Context
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump Github context
+        uses: crazy-max/ghaction-dump-context@v2
   build-and-release:
     name: Build and Test
     strategy:
