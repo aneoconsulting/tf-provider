@@ -8,7 +8,7 @@ use rand::{thread_rng, Rng};
 
 use tf_provider::{
     AttributePath, Diagnostics, Resource, Schema, Value, ValueEmpty, ValueList, ValueMap,
-    ValueString,
+    ValueNumber, ValueString,
 };
 
 use crate::connection::Connection;
@@ -36,7 +36,7 @@ where
     T: Clone,
 {
     type State<'a> = ResourceState<'a, T>;
-    type PrivateState<'a> = ValueEmpty;
+    type PrivateState<'a> = ValueNumber;
     type ProviderMetaState<'a> = ValueEmpty;
 
     fn schema(&self, _diags: &mut Diagnostics) -> Option<Schema> {
@@ -195,11 +195,14 @@ where
         diags: &mut Diagnostics,
         planned_state: Self::State<'a>,
         _config_state: Self::State<'a>,
-        planned_private_state: Self::PrivateState<'a>,
+        mut private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state.clone();
         state.normalize(diags);
+
+        let version = private_state.unwrap_or_default() + 1;
+        private_state = Value::from(version);
 
         let id = state.extract_id();
 
@@ -211,6 +214,7 @@ where
 
         let mut state_env = prepare_envs(&[(&planned_state.inputs, "INPUT_")]);
         state_env.push((Cow::from("ID"), Cow::from(id.as_ref())));
+        state_env.push((Cow::from("VERSION"), Cow::from(version.to_string())));
 
         let create_cmd = state.create.cmd();
         let create_dir = state.create.dir();
@@ -264,7 +268,7 @@ where
 
         state.id = Value::Value(id);
 
-        Some((state, planned_private_state))
+        Some((state, private_state))
     }
     async fn update<'a>(
         &self,
@@ -272,7 +276,7 @@ where
         prior_state: Self::State<'a>,
         planned_state: Self::State<'a>,
         _config_state: Self::State<'a>,
-        planned_private_state: Self::PrivateState<'a>,
+        mut private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let connection_default = Default::default();
@@ -280,6 +284,9 @@ where
             .connect
             .as_ref()
             .unwrap_or(&connection_default);
+
+        let version = private_state.unwrap_or_default() + 1;
+        private_state = Value::from(version);
 
         let mut state = planned_state.clone();
         state.normalize(diags);
@@ -291,6 +298,7 @@ where
             (&prior_state.state, "STATE_"),
         ]);
         state_env.push((Cow::from("ID"), Cow::from(id.as_ref())));
+        state_env.push((Cow::from("VERSION"), Cow::from(version.to_string())));
 
         let modified = find_modified(&prior_state.inputs, &planned_state.inputs);
         if let Some((update, attr_path)) = find_update(&planned_state.update, &modified) {
@@ -346,7 +354,7 @@ where
 
         state.id = Value::Value(id);
 
-        Some((state, planned_private_state))
+        Some((state, private_state))
     }
     async fn destroy<'a>(
         &self,
