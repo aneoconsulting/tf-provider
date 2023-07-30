@@ -25,10 +25,10 @@ resource "generic_ssh_cmd" "test" {
   }
 
   create {
-    cmd = "env | grep -P 'INPUT|STATE|HOME|ID'"
+    cmd = "env | grep -P 'INPUT|STATE|HOME|ID|VERSION'"
   }
   destroy {
-    cmd = "env | grep -P 'INPUT|STATE|HOME|ID'"
+    cmd = "env | grep -P 'INPUT|STATE|HOME|ID|VERSION'"
   }
 
   update {
@@ -48,7 +48,7 @@ resource "generic_ssh_cmd" "test" {
   }
   update {
     triggers = ["b"]
-    cmd      = "echo update b"
+    cmd      = "env | grep -P 'INPUT|STATE|HOME|ID|VERSION'"
     reloads  = ["plop"]
   }
 
