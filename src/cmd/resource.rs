@@ -60,7 +60,8 @@ where
         private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
-        let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
+        let mut state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
+        state_env.push((Cow::from("ID"), Cow::from(state.id.as_str())));
 
         let mut state = state.clone();
         state.normalize(diags);
@@ -199,13 +200,8 @@ where
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
         let mut state = planned_state.clone();
         state.normalize(diags);
-        state.id = ValueString::Value(
-            thread_rng()
-                .sample_iter(&Alphanumeric)
-                .take(30)
-                .map(char::from)
-                .collect(),
-        );
+
+        let id = state.extract_id();
 
         let connection_default = Default::default();
         let connection = planned_state
@@ -213,7 +209,8 @@ where
             .as_ref()
             .unwrap_or(&connection_default);
 
-        let state_env = prepare_envs(&[(&planned_state.inputs, "INPUT_")]);
+        let mut state_env = prepare_envs(&[(&planned_state.inputs, "INPUT_")]);
+        state_env.push((Cow::from("ID"), Cow::from(id.as_ref())));
 
         let create_cmd = state.create.cmd();
         let create_dir = state.create.dir();
@@ -265,6 +262,8 @@ where
 
         state.read(diags, &self.connect, &state_env, false).await;
 
+        state.id = Value::Value(id);
+
         Some((state, planned_private_state))
     }
     async fn update<'a>(
@@ -284,21 +283,14 @@ where
 
         let mut state = planned_state.clone();
         state.normalize(diags);
-        if !state.id.is_value() {
-            state.id = ValueString::Value(
-                thread_rng()
-                    .sample_iter(&Alphanumeric)
-                    .take(30)
-                    .map(char::from)
-                    .collect(),
-            );
-        }
+        let id = state.extract_id();
 
-        let state_env = prepare_envs(&[
+        let mut state_env = prepare_envs(&[
             (&planned_state.inputs, "INPUT_"),
             (&prior_state.inputs, "PREVIOUS_"),
             (&prior_state.state, "STATE_"),
         ]);
+        state_env.push((Cow::from("ID"), Cow::from(id.as_ref())));
 
         let modified = find_modified(&prior_state.inputs, &planned_state.inputs);
         if let Some((update, attr_path)) = find_update(&planned_state.update, &modified) {
@@ -352,6 +344,8 @@ where
 
         state.read(diags, &self.connect, &state_env, false).await;
 
+        state.id = Value::Value(id);
+
         Some((state, planned_private_state))
     }
     async fn destroy<'a>(
@@ -363,7 +357,8 @@ where
         let connection_default = Default::default();
         let connection = state.connect.as_ref().unwrap_or(&connection_default);
 
-        let state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
+        let mut state_env = prepare_envs(&[(&state.inputs, "INPUT_"), (&state.state, "STATE_")]);
+        state_env.push((Cow::from("ID"), Cow::from(state.id.as_str())));
 
         let destroy_cmd = state.destroy.cmd();
         let destroy_dir = state.destroy.dir();
@@ -475,4 +470,18 @@ fn find_update<'a>(
         }
     }
     found.map(|(update, i)| (update, AttributePath::new("update").index(i as i64)))
+}
+
+impl<'a, T: Connection> ResourceState<'a, T> {
+    fn extract_id(&mut self) -> Cow<'a, str> {
+        if let Value::Value(id) = std::mem::take(&mut self.id) {
+            id
+        } else {
+            thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(30)
+                .map(char::from)
+                .collect()
+        }
+    }
 }

@@ -25,10 +25,10 @@ resource "generic_ssh_cmd" "test" {
   }
 
   create {
-    cmd = "env | grep -P 'INPUT|STATE|HOME'"
+    cmd = "env | grep -P 'INPUT|STATE|HOME|ID'"
   }
   destroy {
-    cmd = "env | grep -P 'INPUT|STATE|HOME'"
+    cmd = "env | grep -P 'INPUT|STATE|HOME|ID'"
   }
 
   update {
