@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
-use std::io::Seek;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 
@@ -9,14 +8,11 @@ use anyhow::{anyhow, Result};
 use base64::Engine;
 use futures::TryFutureExt;
 use rcgen::{BasicConstraints, IsCa};
-use rustls::internal::msgs::handshake::DigitallySignedStruct;
-use rustls::internal::pemfile;
-use rustls::{ClientCertVerified, HandshakeSignatureValid, ProtocolVersion, TLSError};
 use time::ext::NumericalDuration;
 use tokio::try_join;
 use tokio_stream::wrappers::TcpListenerStream;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::ServerTlsConfig;
+use tonic::transport::{Identity, ServerTlsConfig};
 use tower_http::trace::TraceLayer;
 
 use crate::plugin::grpc_broker_server::GrpcBrokerServer;
@@ -127,7 +123,7 @@ pub async fn serve_dynamic(name: String, provider: Box<dyn DynamicProvider>) -> 
     if let Ok(path) = env::var("GENERIC_PROVIDER_LOG_FILE") {
         let log_file = File::create(path)?;
         tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
+            .with_max_level(tracing::Level::TRACE)
             .with_ansi(false)
             .with_writer(Mutex::new(log_file))
             .init();
@@ -160,53 +156,6 @@ pub async fn serve_dynamic(name: String, provider: Box<dyn DynamicProvider>) -> 
     )?;
 
     Ok(())
-}
-
-struct CertVerifier {
-    pub cert: Vec<u8>,
-    pub root_store: rustls::RootCertStore,
-}
-
-impl rustls::ClientCertVerifier for CertVerifier {
-    fn client_auth_root_subjects(
-        &self,
-        _sni: Option<&webpki::DNSName>,
-    ) -> Option<rustls::DistinguishedNames> {
-        Some(self.root_store.get_subjects())
-    }
-
-    fn verify_client_cert(
-        &self,
-        presented_certs: &[rustls::Certificate],
-        _sni: Option<&webpki::DNSName>,
-    ) -> Result<rustls::ClientCertVerified, TLSError> {
-        if presented_certs.len() != 1 {
-            return Err(TLSError::General(format!(
-                "server sent {} certificates, expected one",
-                presented_certs.len()
-            )));
-        }
-        if presented_certs[0].0 != self.cert {
-            return Err(TLSError::General(
-                "server certificates doesn't match ours".to_string(),
-            ));
-        }
-        Ok(ClientCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &rustls::Certificate,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, TLSError> {
-        // It's a SHA-512 ECDSA, which webpki doesn't support. We assume by default that if the client cert
-        // someone handed us equals the one in the environment variables that this is probably ok.
-        //
-        // FIXME: Blocked by upstream https://github.com/briansmith/ring/issues/824
-
-        Ok(HandshakeSignatureValid::assertion())
-    }
 }
 
 #[derive(Copy, Clone)]
@@ -286,12 +235,8 @@ impl TlsConfig {
             });
         }
 
-        // Read client certificate and put it into the cert store
-        let mut client_root_cert_store = rustls::RootCertStore::empty();
-        let mut pem_buffer = std::io::Cursor::new(env_cert.clone());
-        client_root_cert_store
-            .add_pem_file(&mut pem_buffer)
-            .or(Err(anyhow!("Could not parse client certificate")))?;
+        // Read the client certificate
+        let client_cert = tonic::transport::Certificate::from_pem(env_cert);
 
         // Parameters to generate the server certificate
         let mut cp = rcgen::CertificateParams::new(vec!["localhost".to_string()]);
@@ -320,36 +265,17 @@ impl TlsConfig {
 
         // Generate the server certificate and its keys
         let server_cert = rcgen::Certificate::from_params(cp)?;
-
-        let mut key_buffer = std::io::Cursor::new(server_cert.serialize_private_key_pem());
-        let mut key = pemfile::pkcs8_private_keys(&mut key_buffer).or(Err(anyhow!(
-            "Could not generate the private key of the server certificate"
-        )))?;
-
         let server_cert_der = server_cert.serialize_der_with_signer(&server_cert)?;
+
         let p = pem::Pem::new("CERTIFICATE".to_string(), server_cert_der.clone());
         let server_cert_pem = pem::encode(&p);
 
-        let mut cert_buffer = std::io::Cursor::new(server_cert_pem);
-        let tls_cert = pemfile::certs(&mut cert_buffer).unwrap();
+        let server_cert_key_pem = server_cert.serialize_private_key_pem();
 
-        cert_buffer.rewind()?;
-
-        let raw_cert = env_cert.as_bytes();
-        let x509_cert = x509_parser::pem::parse_x509_pem(raw_cert)?.1;
-        let mut server_config = rustls::ServerConfig::new(std::sync::Arc::new(CertVerifier {
-            cert: x509_cert.contents,
-            root_store: client_root_cert_store,
-        }));
-        server_config.set_single_cert(
-            tls_cert,
-            key.pop().ok_or(anyhow!(
-                "Could not get the private key of the server certificate"
-            ))?,
-        )?;
-        server_config.versions = vec![ProtocolVersion::TLSv1_2];
-        let mut tls_config = ServerTlsConfig::new();
-        tls_config.rustls_server_config(server_config);
+        let tls_config = ServerTlsConfig::new()
+            .client_ca_root(client_cert)
+            .client_auth_optional(true)
+            .identity(Identity::from_pem(server_cert_pem, server_cert_key_pem));
 
         Ok(Self {
             server: Some(tls_config),
