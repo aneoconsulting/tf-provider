@@ -42,3 +42,8 @@ pem = "3.0"
 
 [build-dependencies]
 tonic-build = "0.9"
+
+
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-buildroot-linux-musl-gcc"
+rustflags = ["-C", "target-feature=+crt-static", "-C", "link-arg=-lgcc"]
