@@ -6,8 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = { version = "0.9", features = ["tls", "transport"] }
-prost = "0.11"
+tonic = { version = "0.10", features = ["tls", "transport"] }
+prost = "0.12"
 futures = "0.3"
 futures-core = "0.3"
 futures-util = "0.3"
@@ -41,7 +41,7 @@ time = "0.3"
 pem = "3.0"
 
 [build-dependencies]
-tonic-build = "0.9"
+tonic-build = "0.10"
 
 
 [target.aarch64-unknown-linux-musl]
