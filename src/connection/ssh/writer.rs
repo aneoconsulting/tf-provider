@@ -1,8 +1,7 @@
 use std::{future::Future, io::ErrorKind, pin::Pin, sync::Arc};
 
 use anyhow::Result;
-use rusftp::{pflags, SftpClient, StatusCode};
-use russh::client::Handle;
+use rusftp::{pflags, russh::client::Handle, SftpClient, StatusCode};
 use tokio::io::AsyncWrite;
 
 use super::ClientHandler;

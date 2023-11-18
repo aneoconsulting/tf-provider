@@ -3,6 +3,7 @@ use std::{collections::HashMap, pin::Pin, sync::Arc};
 use crate::connection::{Connection, ExecutionResult};
 use anyhow::Result;
 use async_trait::async_trait;
+use futures_core::Future;
 use rusftp::SftpClient;
 use serde::{Deserialize, Serialize};
 use tf_provider::{
@@ -25,17 +26,23 @@ pub struct ConnectionSsh {
 }
 
 impl ConnectionSsh {
-    async fn get_client<'a, 'b>(&'a self, config: &ConnectionSshConfig<'b>) -> Result<Arc<Client>> {
-        let mut clients = self.clients.lock().await;
-        let client = match clients.entry(config.clone().extend()) {
-            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-            std::collections::hash_map::Entry::Vacant(entry) => {
-                let client = Client::connect(entry.key()).await?;
-                entry.insert(Arc::new(client))
-            }
-        };
+    fn get_client<'a>(
+        &'a self,
+        config: &ConnectionSshConfig<'a>,
+    ) -> impl Future<Output = Result<Arc<Client>>> + Send + 'a {
+        let config = config.clone();
+        async move {
+            let mut clients = self.clients.lock().await;
+            let client = match clients.entry(config.extend()) {
+                std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    let client = Client::connect(entry.key()).await?;
+                    entry.insert(Arc::new(client))
+                }
+            };
 
-        Ok(client.clone())
+            Ok(client.clone())
+        }
     }
 }
 

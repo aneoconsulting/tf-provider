@@ -2,8 +2,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use anyhow::Result;
 use bytes::Bytes;
-use rusftp::{SftpClient, StatusCode};
-use russh::client::Handle;
+use rusftp::{russh::client::Handle, SftpClient, StatusCode};
 use tokio::io::AsyncRead;
 
 use super::ClientHandler;

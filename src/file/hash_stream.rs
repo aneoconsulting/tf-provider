@@ -94,18 +94,18 @@ macro_rules! impl_all {
     };
 }
 
-impl_all!(A);
-impl_all!(A B);
-impl_all!(A B C);
+// impl_all!(A);
+// impl_all!(A B);
+// impl_all!(A B C);
 impl_all!(A B C D);
-impl_all!(A B C D E);
-impl_all!(A B C D E F);
-impl_all!(A B C D E F G);
-impl_all!(A B C D E F G H);
-impl_all!(A B C D E F G H I);
-impl_all!(A B C D E F G H I J);
-impl_all!(A B C D E F G H I J K);
-impl_all!(A B C D E F G H I J K L);
+// impl_all!(A B C D E);
+// impl_all!(A B C D E F);
+// impl_all!(A B C D E F G);
+// impl_all!(A B C D E F G H);
+// impl_all!(A B C D E F G H I);
+// impl_all!(A B C D E F G H I J);
+// impl_all!(A B C D E F G H I J K);
+// impl_all!(A B C D E F G H I J K L);
 
 pub(super) type DefaultHashingStream<Inner> = HashingStream<(Md5, Sha1, Sha256, Sha512), Inner>;
 
