@@ -23,12 +23,12 @@ jobs:
       matrix:
         job:
           - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest, cross: false }
-          - { target: i586-unknown-linux-musl, os: linux, arch: "386", runner: ubuntu-latest, cross: false }
+          #- { target: i686-unknown-linux-musl, os: linux, arch: "386", runner: ubuntu-latest, cross: false }
           #- { target: aarch64-unknown-linux-musl, os: linux, arch: arm64, runner: ubuntu-latest, cross: true }
           #- { target: arm-unknown-linux-musleabi, os: linux, arch: arm, runner: ubuntu-latest, cross: true }
           #- { target: x86_64-unknown-freebsd, os: freebsd, arch: amd64, runner: ubuntu-latest, cross: true } # Does not run
           #- { target: i686-unknown-freebsd, os: freebsd, arch: "386", runner: ubuntu-latest, cross: true } # Does not compile
-          #- { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest, cross: false }
+          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest, cross: false }
           #- { target: aarch64-apple-darwin, os: darwin, arch: arm64, runner: macos-latest, cross: false } # Does not compile
           - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest, cross: false }
           - { target: i686-pc-windows-msvc, os: windows, arch: "386", runner: windows-latest, cross: false }

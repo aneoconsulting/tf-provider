@@ -3,7 +3,10 @@ use std::sync::Arc;
 use crate::connection::ExecutionResult;
 use anyhow::{anyhow, Error, Result};
 use async_trait::async_trait;
-use russh::client::{Config, Handle, Handler};
+use rusftp::russh::{
+    self,
+    client::{Config, Handle, Handler},
+};
 use tf_provider::Value;
 use tokio::{
     io::AsyncWriteExt,

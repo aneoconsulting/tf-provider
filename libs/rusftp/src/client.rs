@@ -14,23 +14,29 @@ pub struct SftpClient {
 
 macro_rules! command {
     ($name:ident: $input:ident) => {
-        pub async fn $name(&self, request: message::$input) -> Result<(), message::Status> {
-            let response = self.send(request.into()).await;
-            match response {
-                Message::Status(status) => status.to_result(()),
-                _ => Err(message::StatusCode::BadMessage
-                    .to_status("Expected a status".into())),
+        pub fn $name(&self, request: message::$input) -> impl Future<Output = Result<(), message::Status>> + Send + 'static {
+            let future = self.send(request.into());
+            async move {
+                let response = future.await;
+                match response {
+                    Message::Status(status) => status.to_result(()),
+                    _ => Err(message::StatusCode::BadMessage
+                        .to_status("Expected a status".into())),
+                }
             }
         }
     };
     ($name:ident: $input:ident -> $output:ident) => {
-        pub async fn $name(&self, request: message::$input) -> Result<message::$output, message::Status> {
-            let response = self.send(request.into()).await;
-            match response {
-                Message::$output(response) => Ok(response),
-                Message::Status(status) => Err(status),
-                _ => Err(message::StatusCode::BadMessage
-                    .to_status(std::stringify!(Expected a $output or a status).into())),
+        pub fn $name(&self, request: message::$input) -> impl Future<Output = Result<message::$output, message::Status>> + Send + 'static {
+            let future = self.send(request.into());
+            async move {
+                let response = future.await;
+                match response {
+                    Message::$output(response) => Ok(response),
+                    Message::Status(status) => Err(status),
+                    _ => Err(message::StatusCode::BadMessage
+                        .to_status(std::stringify!(Expected a $output or a status).into())),
+                }
             }
         }
     };
@@ -163,20 +169,25 @@ impl SftpClient {
         Ok(Self { commands: tx })
     }
 
-    pub async fn send(&self, request: Message) -> Message {
+    pub fn send(&self, request: Message) -> impl Future<Output = Message> + Send + 'static {
         let (tx, rx) = oneshot::channel();
 
-        if self.commands.send((request, tx)).is_err() {
-            message::StatusCode::Failure.to_message("Could not send request to SFTP client".into())
-        } else {
-            rx.await.unwrap_or(
+        let is_err = self.commands.send((request, tx)).is_err();
+
+        async move {
+            if is_err {
                 message::StatusCode::Failure
-                    .to_message("Could not get reply from SFTP client".into()),
-            )
+                    .to_message("Could not send request to SFTP client".into())
+            } else {
+                rx.await.unwrap_or(
+                    message::StatusCode::Failure
+                        .to_message("Could not get reply from SFTP client".into()),
+                )
+            }
         }
     }
 
-    pub fn stop(&self) -> impl Future<Output = ()> + '_ {
+    pub fn stop(&self) -> impl Future<Output = ()> + Send + '_ {
         self.commands.closed()
     }
 

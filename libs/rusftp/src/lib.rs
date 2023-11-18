@@ -8,3 +8,4 @@ pub mod encoder;
 pub use client::SftpClient;
 pub use error::Error;
 pub use message::*;
+pub use russh;
