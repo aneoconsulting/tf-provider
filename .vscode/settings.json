@@ -1,9 +1,0 @@
-{
-    "rust-analyzer.linkedProjects": [
-        "./Cargo.toml",
-        "./libs/tf-provider/Cargo.toml",
-        "./libs/rusftp/Cargo.toml",
-    ],
-    "editor.formatOnPaste": true,
-    "editor.formatOnSave": true
-}
