@@ -1,7 +1,12 @@
 [package]
 name = "tf-provider"
 version = "0.1.0"
+authors = ["Florian Lemaitre <flemaitre@aneo.fr>"]
+description = "Plugin framework for Terraform and ToFu"
+repository = "https://github.com/aneoconsulting/tf-provider"
+license = "Apache-2.0"
 edition = "2021"
+include = ["**/*.rs", "Cargo.toml", "LICENSE"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
