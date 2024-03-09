@@ -1,0 +1,55 @@
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+name: Test
+
+jobs:
+  dump-ctx:
+    name: Context
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump Github context
+        uses: crazy-max/ghaction-dump-context@v2
+  build-and-release:
+    name: Build and Test
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest, cross: false }
+          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest, cross: false }
+          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest, cross: false }
+    runs-on: ${{ matrix.job.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Cross Compiler
+        if: matrix.job.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools gcc-multilib
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.job.target }}
+          toolchain: 1.76.0
+          components: rust-src,rustfmt,clippy
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2.7.3
+        with:
+          shared-key: "build-${{ matrix.job.target }}"
+      - name: Build
+        run: |
+          cargo build --locked --release --target ${{ matrix.job.target }}
+      - name: Test
+        run: |
+          cargo test --locked --release --target ${{ matrix.job.target }}
+      - name: Format
+        run: |
+          cargo fmt --check
+      - name: Clippy
+        run: |
+          cargo clippy --no-deps -- -Dwarnings
