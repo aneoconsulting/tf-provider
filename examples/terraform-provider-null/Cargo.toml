@@ -1,0 +1,23 @@
+[package]
+name = "null"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+strip = "debuginfo"
+
+[dependencies]
+tf-provider = "0.1"
+tokio = { version = "1.0", features = [
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "time",
+    "fs",
+] }
+
+serde = { version = "1.0", features = ["derive"] }
+
+async-trait = "0.1"
+anyhow = "1"
+rand = "0.8"
