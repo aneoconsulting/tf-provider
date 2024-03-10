@@ -26,6 +26,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        if: not ${{ matrix.job.cross }}
       - name: Install Cross Compiler
         if: matrix.job.os == 'linux'
         run: |
