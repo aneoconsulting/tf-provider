@@ -14,12 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod provider;
-mod resource;
+mod null_provider;
+mod null_resource;
 
 use anyhow::Result;
 
-use provider::NullProvider;
+use null_provider::NullProvider;
 use tf_provider::serve;
 
 #[tokio::main]

@@ -1,5 +1,5 @@
 [package]
-name = "null"
+name = "terraform-provider-null"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 strip = "debuginfo"
 
 [dependencies]
-tf-provider = "0.1"
+tf-provider = { path = "../../" }
 tokio = { version = "1.0", features = [
     "rt-multi-thread",
     "macros",
