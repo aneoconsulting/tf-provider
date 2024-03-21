@@ -570,18 +570,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "null"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "rand",
- "serde",
- "tf-provider",
- "tokio",
-]
-
-[[package]]
 name = "num-conv"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1075,25 +1063,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "terraform-provider-null"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "rand",
+ "serde",
+ "tf-provider",
+ "tokio",
+]
+
+[[package]]
 name = "tf-provider"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4366fb9a395d10708df8a6db21d5be1e8e1b089e3ab298f104c2204f335ed8f6"
 dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
  "base64",
  "futures",
- "futures-core",
- "futures-util",
  "pem",
  "prost",
- "rand",
  "rcgen",
- "rmp",
  "rmp-serde",
- "rustls",
  "serde",
  "serde_bytes",
  "serde_json",
@@ -1106,7 +1099,6 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-subscriber",
- "webpki",
 ]
 
 [[package]]
@@ -1414,16 +1406,6 @@ name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
-
-[[package]]
-name = "webpki"
-version = "0.22.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed63aea5ce73d0ff405984102c42de94fc55a6b75765d621c65262469b3c9b53"
-dependencies = [
- "ring",
- "untrusted",
-]
 
 [[package]]
 name = "which"

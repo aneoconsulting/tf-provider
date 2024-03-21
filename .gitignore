@@ -2,3 +2,8 @@ target
 .nix-gcroots
 .direnv
 .vscode
+.terraform
+.terraform.*
+terraform.tfstate
+terraform.tfstate.*
+*.log

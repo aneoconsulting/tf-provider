@@ -18,7 +18,7 @@ use async_trait::async_trait;
 
 use tf_provider::{map, Block, Description, Provider, Schema, ValueEmpty};
 
-use crate::resource::NullResource;
+use crate::null_resource::NullResource;
 
 #[derive(Debug, Default, Clone)]
 pub struct NullProvider;
