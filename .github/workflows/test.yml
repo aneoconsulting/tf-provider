@@ -19,10 +19,20 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { target: x86_64-unknown-linux-gnu, os: linux, arch: amd64, runner: ubuntu-latest }
-          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest }
-          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest }
-          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest }
+          - { target: x86_64-unknown-linux-gnu, os: linux, arch: amd64, runner: ubuntu-latest, run: true }
+          - { target: i686-unknown-linux-gnu, os: linux, arch: "386", runner: ubuntu-latest, run: true }
+          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest, run: true }
+          - { target: i686-unknown-linux-musl, os: linux, arch: "386", runner: ubuntu-latest, run: true }
+          - { target: aarch64-unknown-linux-musl, os: linux, arch: arm64, runner: ubuntu-latest, run: false }
+          - { target: arm-unknown-linux-musleabi, os: linux, arch: arm, runner: ubuntu-latest, run: false }
+          - { target: x86_64-unknown-freebsd, os: freebsd, arch: amd64, runner: ubuntu-latest, run: false }
+          - { target: i686-unknown-freebsd, os: freebsd, arch: "386", runner: ubuntu-latest, run: false }
+          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest, run: true }
+          - { target: aarch64-apple-darwin, os: darwin, arch: arm64, runner: macos-latest, run: false }
+          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest, run: true }
+          - { target: i686-pc-windows-msvc, os: windows, arch: "386", runner: windows-latest, run: true }
+          - { target: aarch64-pc-windows-msvc, os: windows, arch: arm64, runner: windows-latest, run: true }
+          #- { target: wasm32-wasi, os: wasi, arch: wasm, runner: ubuntu-latest, run: false }
     runs-on: ${{ matrix.job.runner }}
     steps:
       - name: Checkout
@@ -30,10 +40,23 @@ jobs:
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
       - name: Install Cross Compiler
-        if: matrix.job.target == 'x86_64-unknown-linux-musl'
         run: |
+          set -x
           sudo apt-get update
-          sudo apt-get install -y musl-tools gcc-multilib
+          case "${{ matrix.job.target }}" in
+            aarch64-unknown-linux-musl)
+              sudo apt-get install -y clang llvm qemu-user gcc-aarch64-linux-musl libc6-dev-arm64-cross
+              ;;
+            arm-unknown-linux-musleabi)
+              sudo apt-get install -y clang llvm qemu-user gcc-arm-linux-musl libc6-dev-arm-cross
+              ;;
+            x86_64-unknown-linux-musl)
+              sudo apt-get install -y clang llvm musl-tools gcc-multilib
+              ;;
+            i686-unknown-linux-musl)
+              sudo apt-get install -y musl-tools gcc-multilib libc6-dev-i386
+              ;;
+          esac
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -48,6 +71,7 @@ jobs:
         run: |
           cargo build --locked --release --target ${{ matrix.job.target }}
       - name: Test
+        if: ${{ matrix.job.run }}
         run: |
           cargo test --locked --release --target ${{ matrix.job.target }}
       - name: Format
