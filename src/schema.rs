@@ -85,7 +85,8 @@ pub enum NestedBlock {
     /// The nested block can appear at most once (if not given, it will be null)
     /// This is implemented with a list block, and must be serialized with `value::serde_as_vec`
     /// ```
-    /// use tf_plugin::{value, Value};
+    /// # use serde::{Serialize, Deserialize};
+    /// use tf_provider::{value, Value};
     ///
     /// #[derive(Serialize, Deserialize)]
     /// struct MyBlock {

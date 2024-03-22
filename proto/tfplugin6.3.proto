@@ -313,9 +313,9 @@ message PlanResourceChange {
         // specific details of the legacy SDK type system, and are not a general
         // mechanism to avoid proper type handling in providers.
         //
-        //     ====              DO NOT USE THIS              ====
-        //     ==== THIS MUST BE LEFT UNSET IN ALL OTHER SDKS ====
-        //     ====              DO NOT USE THIS              ====
+        // ====              DO NOT USE THIS              ====
+        // ==== THIS MUST BE LEFT UNSET IN ALL OTHER SDKS ====
+        // ====              DO NOT USE THIS              ====
         bool legacy_type_system = 5;
     }
 }
@@ -342,9 +342,9 @@ message ApplyResourceChange {
         // specific details of the legacy SDK type system, and are not a general
         // mechanism to avoid proper type handling in providers.
         //
-        //     ====              DO NOT USE THIS              ====
-        //     ==== THIS MUST BE LEFT UNSET IN ALL OTHER SDKS ====
-        //     ====              DO NOT USE THIS              ====
+        // ====              DO NOT USE THIS              ====
+        // ==== THIS MUST BE LEFT UNSET IN ALL OTHER SDKS ====
+        // ====              DO NOT USE THIS              ====
         bool legacy_type_system = 4;
     }
 }
