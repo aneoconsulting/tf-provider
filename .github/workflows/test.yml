@@ -19,18 +19,18 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest, cross: false }
-          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest, cross: false }
-          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest, cross: false }
+          - { target: x86_64-unknown-linux-gnu, os: linux, arch: amd64, runner: ubuntu-latest }
+          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest }
+          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest }
+          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest }
     runs-on: ${{ matrix.job.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
-        if: not ${{ matrix.job.cross }}
       - name: Install Cross Compiler
-        if: matrix.job.os == 'linux'
+        if: matrix.job.target == 'x86_64-unknown-linux-musl'
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools gcc-multilib
