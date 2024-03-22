@@ -39,7 +39,7 @@ jobs:
         with:
           targets: ${{ matrix.job.target }}
           toolchain: 1.76.0
-          components: rust-src,rustfmt,clippy
+          components: rust-src,rust-docs,rustfmt,clippy
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2.7.3
         with:
