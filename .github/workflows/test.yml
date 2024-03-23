@@ -18,41 +18,107 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        job:
-          - { target: x86_64-unknown-linux-musl, os: linux, arch: amd64, runner: ubuntu-latest, cross: false }
-          - { target: x86_64-apple-darwin, os: darwin, arch: amd64, runner: macos-latest, cross: false }
-          - { target: x86_64-pc-windows-msvc, os: windows, arch: amd64, runner: windows-latest, cross: false }
-    runs-on: ${{ matrix.job.runner }}
+        target:
+          # BSDs
+          #- { platform: aarch64-unknown-freebsd, os: linux, runner: ubuntu-latest, run: true } # No rust core
+          - { platform: i686-unknown-freebsd, os: linux, runner: ubuntu-latest, run: false }
+          - { platform: x86_64-unknown-freebsd, os: linux, runner: ubuntu-latest, run: false }
+          #- { platform: aarch64-unknown-netbsd, os: linux, runner: ubuntu-latest, run: true } # No rust core
+          - { platform: x86_64-unknown-netbsd, os: linux, runner: ubuntu-latest, run: false }
+
+          # WASM
+          #- { platform: wasm32-wasi, os: linux, runner: ubuntu-latest, run: true } # Incompatible Tokio
+
+          # Android (redundant with Linux Musl)
+          # - { platform: aarch64-linux-android, os: linux, runner: ubuntu-latest, run: true }
+          # - { platform: arm-linux-androideabi, os: linux, runner: ubuntu-latest, run: true }
+          # - { platform: i686-linux-android, os: linux, runner: ubuntu-latest, run: true }
+          # - { platform: x86_64-linux-android, os: linux, runner: ubuntu-latest, run: true }
+
+          # Linux Musl
+          - { platform: aarch64-unknown-linux-musl, os: linux, runner: ubuntu-latest, run: true }
+          - { platform: arm-unknown-linux-musleabi, os: linux, runner: ubuntu-latest, run: true }
+          #- { platform: i586-unknown-linux-musl, os: linux, runner: ubuntu-latest, run: true } # Incompatible Ring: no SSE
+          - { platform: i686-unknown-linux-musl, os: linux, runner: ubuntu-latest, run: true }
+          - { platform: x86_64-unknown-linux-musl, os: linux, runner: ubuntu-latest, run: true }
+
+          # Linux GNU
+          # Redundant with Linux Musl
+          # - { platform: aarch64-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true }
+          # - { platform: arm-unknown-linux-gnueabi, os: linux, runner: ubuntu-latest, run: true }
+          # #- { platform: i586-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true } # Incompatible Ring: no SSE
+          # - { platform: i686-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true }
+          # - { platform: x86_64-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true }
+
+          #- { platform: mips-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true } # No rust core
+          #- { platform: mips64-unknown-linux-gnuabi64, os: linux, runner: ubuntu-latest, run: true } # No rust core, Incompatible Ring: unknown Arch
+          - { platform: powerpc-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true }
+          - { platform: powerpc64-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true }
+          #- { platform: riscv32gc-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true } # No rust core, Incompatible Ring: unknown Arch
+          - { platform: riscv64gc-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true }
+          - { platform: s390x-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true }
+          #- { platform: sparc-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true } # Incompatible Ring: unknown Arch
+          #- { platform: sparc64-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true } # Incompatible Ring: unknown Arch
+
+          # MacOS
+          - { platform: aarch64-apple-darwin, os: darwin, runner: macos-latest, run: false }
+          - { platform: x86_64-apple-darwin, os: darwin, runner: macos-latest, run: true }
+
+          # Windows
+          - { platform: aarch64-pc-windows-msvc, os: windows, runner: windows-latest, run: false }
+          #- { platform: i586-pc-windows-msvc, os: windows, runner: windows-latest, run: true } # Incompatible Ring: no SSE
+          - { platform: i686-pc-windows-msvc, os: windows, runner: windows-latest, run: true }
+          - { platform: x86_64-pc-windows-msvc, os: windows, runner: windows-latest, run: true }
+        toolchain:
+          - stable
+          - nightly
+    runs-on: ${{ matrix.target.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        if: not ${{ matrix.job.cross }}
-      - name: Install Cross Compiler
-        if: matrix.job.os == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools gcc-multilib
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: protoc,sccache
       - name: Install toolchain
+        if: ${{ !contains(matrix.toolchain, 'nightly') }}
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.job.target }}
-          toolchain: 1.76.0
+          targets: ${{ matrix.target.platform }}
+          toolchain: ${{ matrix.toolchain }}
           components: rust-src,rust-docs,rustfmt,clippy
+      - name: Install toolchain (with miri)
+        if: contains(matrix.toolchain, 'nightly')
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target.platform }}
+          toolchain: ${{ matrix.toolchain }}
+          components: rust-src,rust-docs,rustfmt,clippy,miri
+      - name: Install cross-compilation tools
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target.platform }}
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2.7.3
         with:
-          shared-key: "build-${{ matrix.job.target }}"
+          shared-key: "build-${{ matrix.toolchain }}-${{ matrix.target.platform }}"
       - name: Build
         run: |
-          cargo build --locked --release --target ${{ matrix.job.target }}
+          cargo build --all --locked
       - name: Test
+        if: matrix.target.run
         run: |
-          cargo test --locked --release --target ${{ matrix.job.target }}
+          cargo test --all --locked
+      - name: Test Release
+        if: matrix.target.run
+        run: |
+          cargo test --all --locked --release
+      - name: Test Miri
+        if: contains(matrix.toolchain, 'nightly')
+        run: |
+          cargo miri test --all --locked
       - name: Format
         run: |
-          cargo fmt --check
+          cargo fmt --all --check
       - name: Clippy
         run: |
-          cargo clippy --no-deps -- -Dwarnings -Dunused-crate-dependencies
+          cargo clippy --all --no-deps -- -Dwarnings -Dunused-crate-dependencies
