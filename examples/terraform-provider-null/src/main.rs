@@ -22,7 +22,7 @@ use anyhow::Result;
 use null_provider::NullProvider;
 use tf_provider::serve;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     serve("null", NullProvider).await
 }

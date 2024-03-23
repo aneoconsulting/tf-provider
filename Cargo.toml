@@ -1,48 +1,60 @@
+[workspace]
+members = ["examples/*"]
+resolver = "2"
+
+[workspace.package]
+authors = ["Florian Lemaitre <flemaitre@aneo.fr>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/aneoconsulting/tf-provider"
+version = "0.1.0"
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+tokio = "1.0"
+
+[profile.release]
+strip = "debuginfo"
+
 [package]
 name = "tf-provider"
-version = "0.1.0"
-authors = ["Florian Lemaitre <flemaitre@aneo.fr>"]
+
 description = "Plugin framework for Terraform and ToFu"
-repository = "https://github.com/aneoconsulting/tf-provider"
-license = "Apache-2.0"
-edition = "2021"
-include = ["**/*.rs", "proto/*.proto", "Cargo.toml", "LICENSE"]
+include = ["**/*.rs", "Cargo.toml", "LICENSE", "proto/*.proto"]
+
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = { version = "0.10", features = ["tls", "transport"] }
-prost = "0.12"
-futures = "0.3"
-tokio = { version = "1.0", features = [
-    "rt-multi-thread",
-    "macros",
-    "sync",
-    "time",
-] }
-tokio-stream = { version = "0.1", features = ["sync", "net"] }
-tokio-util = "0.7"
-
 async-stream = "0.3"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_bytes = "0.11"
-rmp-serde = "1.1"
-
-async-trait = "0.1"
-anyhow = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["json", "fmt", "std"] }
-rcgen = "0.12.1"
-base64 = "0.21"
-tower-http = { version = "0.4", features = ["trace"] }
-time = "0.3"
+base64 = "0.22"
+futures = "0.3"
 pem = "3.0"
+prost = "0.12"
+rcgen = "0.12.1"
+rmp-serde = "1.1"
+serde_bytes = "0.11"
+serde_json = "1.0"
+time = "0.3"
+tokio-stream = { version = "0.1", features = ["net", "sync"] }
+tokio-util = "0.7"
+tonic = { version = "0.11", features = ["tls", "transport"] }
+tower-http = { version = "0.4", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "json", "std"] }
+
+anyhow.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+tokio.workspace = true
 
 [build-dependencies]
-tonic-build = "0.10"
-
-
-[target.aarch64-unknown-linux-musl]
-linker = "aarch64-buildroot-linux-musl-gcc"
-rustflags = ["-C", "target-feature=+crt-static", "-C", "link-arg=-lgcc"]
+tonic-build = "0.11"
