@@ -16,14 +16,15 @@
 
 use std::borrow::Cow;
 
+use anyhow::Result;
 use async_trait::async_trait;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use tf_provider::{
-    map, Attribute, AttributeConstraint, AttributePath, AttributeType, Block, Description,
-    Diagnostics, Resource, Schema, ValueEmpty, ValueMap, ValueString,
+    map, serve, Attribute, AttributeConstraint, AttributePath, AttributeType, Block, Description,
+    Diagnostics, Provider, Resource, Schema, ValueEmpty, ValueMap, ValueString,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -162,4 +163,64 @@ impl Resource for NullResource {
     ) -> Option<()> {
         Some(())
     }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct NullProvider;
+
+#[async_trait]
+impl Provider for NullProvider {
+    type Config<'a> = ValueEmpty;
+    type MetaState<'a> = ValueEmpty;
+
+    fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<tf_provider::Schema> {
+        Some(Schema {
+            version: 1,
+            block: Block {
+                description: Description::plain("null"),
+                ..Default::default()
+            },
+        })
+    }
+
+    async fn validate<'a>(
+        &self,
+        _diags: &mut tf_provider::Diagnostics,
+        _config: Self::Config<'a>,
+    ) -> Option<()> {
+        Some(())
+    }
+
+    async fn configure<'a>(
+        &self,
+        _diags: &mut tf_provider::Diagnostics,
+        _terraform_version: String,
+        _config: Self::Config<'a>,
+    ) -> Option<()> {
+        Some(())
+    }
+
+    fn get_resources(
+        &self,
+        _diags: &mut tf_provider::Diagnostics,
+    ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::resource::DynamicResource>>>
+    {
+        Some(map! {
+            "resource" => NullResource,
+        })
+    }
+
+    fn get_data_sources(
+        &self,
+        _diags: &mut tf_provider::Diagnostics,
+    ) -> Option<
+        std::collections::HashMap<String, Box<dyn tf_provider::data_source::DynamicDataSource>>,
+    > {
+        Some(map! {})
+    }
+}
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
+    serve("null", NullProvider).await
 }
