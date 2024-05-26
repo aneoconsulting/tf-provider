@@ -92,7 +92,7 @@ impl Server {
             .unwrap_or_default()
             .into_iter()
             .filter_map(|(name, function)| match function.schema(&mut diags) {
-                Some(schema) => Some((format!("{}_{}", provider_name, name), (function, schema))),
+                Some(schema) => Some((name, (function, schema))),
                 None => {
                     has_errors = true;
                     None

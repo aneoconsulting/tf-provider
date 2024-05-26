@@ -17,7 +17,7 @@
 use async_trait::async_trait;
 use serde::{de, Deserialize, Serialize};
 
-use crate::{raw::RawValue, schema::FunctionSchema, AttributePath, Diagnostics};
+use crate::{raw::RawValue, schema::FunctionSchema, Diagnostics};
 
 #[async_trait]
 pub trait Function: Send + Sync {
@@ -64,11 +64,11 @@ impl<T: Function> DynamicFunction for T {
                 None
             }
             Err(DecoderError::MsgPackError(index, err)) => {
-                diags.error_short(err.to_string(), AttributePath::new("").index(index as i64));
+                diags.function_error(index as i64, err.to_string());
                 None
             }
             Err(DecoderError::JsonError(index, err)) => {
-                diags.error_short(err.to_string(), AttributePath::new("").index(index as i64));
+                diags.function_error(index as i64, err.to_string());
                 None
             }
             Err(DecoderError::Custom(msg)) => {
@@ -76,6 +76,12 @@ impl<T: Function> DynamicFunction for T {
                 None
             }
         }
+    }
+}
+
+impl<T: Function + 'static> From<T> for Box<dyn DynamicFunction> {
+    fn from(value: T) -> Self {
+        Box::new(value)
     }
 }
 
@@ -91,6 +97,7 @@ enum DecoderError {
     MsgPackError(usize, rmp_serde::decode::Error),
     Custom(String),
 }
+
 impl std::fmt::Display for DecoderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -150,7 +157,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Decoder<'de> {
     deserialize!(deserialize_bytes);
     deserialize!(deserialize_byte_buf);
     deserialize!(deserialize_option);
-    deserialize!(deserialize_unit);
+deserialize!(deserialize_unit);
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where

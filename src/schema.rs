@@ -449,6 +449,18 @@ pub struct Parameter {
     pub description: Description,
 }
 
+impl Default for Parameter {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            param_type: Type::Any,
+            allow_null: Default::default(),
+            allow_unknown: Default::default(),
+            description: Description::plain(""),
+        }
+    }
+}
+
 impl From<&Parameter> for tfplugin6::function::Parameter {
     fn from(value: &Parameter) -> Self {
         Self {

@@ -529,12 +529,6 @@ impl tf::provider_server::Provider for Arc<Server> {
                     function_argument: Some(*idx),
                     text,
                 },
-                [AttributePathStep::Attribute(_), AttributePathStep::Index(idx)] => {
-                    tf::FunctionError {
-                        function_argument: Some(*idx),
-                        text,
-                    }
-                }
                 _ => tf::FunctionError {
                     function_argument: None,
                     text,
