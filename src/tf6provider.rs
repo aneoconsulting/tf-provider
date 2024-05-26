@@ -20,11 +20,40 @@ use crate::diagnostics::Diagnostics;
 use crate::raw::RawValue;
 use crate::server::Server;
 use crate::tfplugin6 as tf;
-use crate::tfplugin6::get_provider_schema::ServerCapabilities;
 use crate::utils::{CollectDiagnostics, OptionExpand};
 
 #[tonic::async_trait]
 impl tf::provider_server::Provider for Arc<Server> {
+    async fn get_metadata(
+        &self,
+        _request: tonic::Request<tf::get_metadata::Request>,
+    ) -> std::result::Result<tonic::Response<tf::get_metadata::Response>, tonic::Status> {
+        let resources = self
+            .resources
+            .keys()
+            .map(|name| tf::get_metadata::ResourceMetadata {
+                type_name: name.clone(),
+            })
+            .collect();
+        let data_sources = self
+            .data_sources
+            .keys()
+            .map(|name| tf::get_metadata::DataSourceMetadata {
+                type_name: name.clone(),
+            })
+            .collect();
+        Ok(tonic::Response::new(tf::get_metadata::Response {
+            server_capabilities: Some(tf::ServerCapabilities {
+                plan_destroy: true,
+                get_provider_schema_optional: false,
+                move_resource_state: false,
+            }),
+            diagnostics: self.init_diags.clone().into(),
+            data_sources,
+            resources,
+            functions: vec![],
+        }))
+    }
     async fn get_provider_schema(
         &self,
         _request: tonic::Request<tf::get_provider_schema::Request>,
@@ -48,7 +77,12 @@ impl tf::provider_server::Provider for Arc<Server> {
             data_source_schemas: data_sources,
             diagnostics: self.init_diags.clone().into(),
             provider_meta: meta_schema,
-            server_capabilities: Some(ServerCapabilities { plan_destroy: true }),
+            server_capabilities: Some(tf::ServerCapabilities {
+                plan_destroy: true,
+                get_provider_schema_optional: false,
+                move_resource_state: false,
+            }),
+            functions: Default::default(),
         }))
     }
     async fn validate_provider_config(
@@ -399,6 +433,20 @@ impl tf::provider_server::Provider for Arc<Server> {
             diagnostics: diags.into(),
         }))
     }
+
+    async fn move_resource_state(
+        &self,
+        _request: tonic::Request<tf::move_resource_state::Request>,
+    ) -> std::result::Result<tonic::Response<tf::move_resource_state::Response>, tonic::Status>
+    {
+        let mut diags = Diagnostics::default();
+        diags.root_error_short("MoveResourceState is not implemented");
+        Ok(tonic::Response::new(tf::move_resource_state::Response {
+            diagnostics: diags.into(),
+            target_private: vec![],
+            target_state: None,
+        }))
+    }
     async fn read_data_source(
         &self,
         request: tonic::Request<tf::read_data_source::Request>,
@@ -422,6 +470,27 @@ impl tf::provider_server::Provider for Arc<Server> {
         Ok(tonic::Response::new(tf::read_data_source::Response {
             state: state.map(Into::into),
             diagnostics: diags.into(),
+        }))
+    }
+    async fn get_functions(
+        &self,
+        _request: tonic::Request<tf::get_functions::Request>,
+    ) -> std::result::Result<tonic::Response<tf::get_functions::Response>, tonic::Status> {
+        Ok(tonic::Response::new(tf::get_functions::Response {
+            diagnostics: vec![],
+            functions: Default::default(),
+        }))
+    }
+    async fn call_function(
+        &self,
+        _request: tonic::Request<tf::call_function::Request>,
+    ) -> std::result::Result<tonic::Response<tf::call_function::Response>, tonic::Status> {
+        Ok(tonic::Response::new(tf::call_function::Response {
+            error: Some(tf::FunctionError {
+                function_argument: None,
+                text: "CallFunction is not implemented".to_owned(),
+            }),
+            result: None,
         }))
     }
     /// ////// Graceful Shutdown
