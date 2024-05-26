@@ -31,6 +31,12 @@ impl AttributePath {
             steps: vec![AttributePathStep::Attribute(root.into())],
         }
     }
+    /// Create a new attribute path for a function argument
+    pub fn function_argument(index: i64) -> Self {
+        Self {
+            steps: vec![AttributePathStep::Index(index)]
+        }
+    }
     /// Create a new attribute path where the attribute `.name` has been appended
     pub fn attribute<T: Into<Cow<'static, str>>>(mut self, name: T) -> Self {
         self.add_attribute(name);

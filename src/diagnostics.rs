@@ -107,6 +107,10 @@ impl Diagnostics {
     pub fn internal_error(&mut self) {
         Option::<()>::None.collect_diagnostics(self);
     }
+    /// Create an error for a function argument
+    pub fn function_error<S: Into<Cow<'static, str>>>(&mut self, index: i64, message: S) {
+        self.add_error(Diagnostic::function(index, message))
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -138,6 +142,14 @@ impl Diagnostic {
             detail,
             attribute,
         }
+    }
+    /// Create a diagnostic for a function argument
+    pub fn function<S: Into<Cow<'static, str>>>(index: i64, message: S) -> Self {
+        Self::new(
+            message,
+            String::default(),
+            AttributePath::function_argument(index),
+        )
     }
     /// Create a diagnostic without AttributePath
     pub fn root<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
