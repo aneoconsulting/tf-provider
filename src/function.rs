@@ -157,7 +157,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Decoder<'de> {
     deserialize!(deserialize_bytes);
     deserialize!(deserialize_byte_buf);
     deserialize!(deserialize_option);
-deserialize!(deserialize_unit);
+    deserialize!(deserialize_unit);
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
     where

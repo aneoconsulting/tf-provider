@@ -34,7 +34,7 @@ impl AttributePath {
     /// Create a new attribute path for a function argument
     pub fn function_argument(index: i64) -> Self {
         Self {
-            steps: vec![AttributePathStep::Index(index)]
+            steps: vec![AttributePathStep::Index(index)],
         }
     }
     /// Create a new attribute path where the attribute `.name` has been appended
