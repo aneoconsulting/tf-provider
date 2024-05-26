@@ -61,7 +61,7 @@ jobs:
           #- { platform: sparc64-unknown-linux-gnu, os: linux, runner: ubuntu-latest, run: true } # Incompatible Ring: unknown Arch
 
           # MacOS
-          - { platform: aarch64-apple-darwin, os: darwin, runner: macos-latest, run: false }
+          - { platform: aarch64-apple-darwin, os: darwin, runner: macos-latest, run: true }
           - { platform: x86_64-apple-darwin, os: darwin, runner: macos-latest, run: true }
 
           # Windows
@@ -97,6 +97,9 @@ jobs:
         uses: taiki-e/setup-cross-toolchain-action@v1
         with:
           target: ${{ matrix.target.platform }}
+      - name: Install terraform
+        if: matrix.target.run
+        uses: hashicorp/setup-terraform@v3
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2.7.3
         with:
@@ -104,6 +107,9 @@ jobs:
       - name: Build
         run: |
           cargo build --all --locked
+      - name: Build Examples
+        run: |
+          cargo build --examples --locked
       - name: Test
         if: matrix.target.run
         run: |
@@ -116,6 +122,20 @@ jobs:
         if: contains(matrix.toolchain, 'nightly')
         run: |
           cargo miri test --all --locked
+      - name: Test Examples
+        if: matrix.target.run
+        shell: bash
+        run: |
+          rm terraform.d/bin
+          ln -s ../target/${{ matrix.target.platform }}/debug/examples terraform.d/bin
+          for d in examples/*/; do
+            (
+              cd "$d"
+              terraform init
+              terraform apply -auto-approve
+              terraform destroy -auto-approve
+            )
+          done
       - name: Format
         run: |
           cargo fmt --all --check

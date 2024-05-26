@@ -1,49 +1,33 @@
-[workspace]
-members = ["examples/*"]
-resolver = "2"
-
-[workspace.package]
+[package]
 authors = ["Florian Lemaitre <flemaitre@aneo.fr>"]
+description = "Plugin framework for Terraform and ToFu"
 edition = "2021"
+include = ["**/*.rs", "Cargo.toml", "LICENSE", "proto/*.proto"]
 license = "Apache-2.0"
+name = "tf-provider"
 repository = "https://github.com/aneoconsulting/tf-provider"
 version = "0.1.0"
-
-[workspace.dependencies]
-anyhow = "1"
-async-trait = "0.1"
-rand = "0.8"
-serde = { version = "1.0", features = ["derive"] }
-tokio = "1.0"
 
 [profile.release]
 strip = "debuginfo"
 
-[package]
-name = "tf-provider"
-
-description = "Plugin framework for Terraform and ToFu"
-include = ["**/*.rs", "Cargo.toml", "LICENSE", "proto/*.proto"]
-
-authors.workspace = true
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
-version.workspace = true
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1"
 async-stream = "0.3"
+async-trait = "0.1"
 base64 = "0.22"
 futures = "0.3"
 pem = "3.0"
 prost = "0.12"
-rcgen = "0.12.1"
+rcgen = "0.12"
 rmp-serde = "1.1"
+serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11"
 serde_json = "1.0"
 time = "0.3"
+tokio = "1.0"
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = "0.7"
 tonic = { version = "0.11", features = ["tls", "transport"] }
@@ -51,10 +35,8 @@ tower-http = { version = "0.4", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "json", "std"] }
 
-anyhow.workspace = true
-async-trait.workspace = true
-serde.workspace = true
-tokio.workspace = true
-
 [build-dependencies]
 tonic-build = "0.11"
+
+[dev-dependencies]
+rand = "0.8"
