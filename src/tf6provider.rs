@@ -16,6 +16,7 @@
 
 use std::sync::Arc;
 
+use crate::attribute_path::AttributePathStep;
 use crate::diagnostics::Diagnostics;
 use crate::raw::RawValue;
 use crate::server::Server;
@@ -42,6 +43,11 @@ impl tf::provider_server::Provider for Arc<Server> {
                 type_name: name.clone(),
             })
             .collect();
+        let functions = self
+            .functions
+            .keys()
+            .map(|name| tf::get_metadata::FunctionMetadata { name: name.clone() })
+            .collect();
         Ok(tonic::Response::new(tf::get_metadata::Response {
             server_capabilities: Some(tf::ServerCapabilities {
                 plan_destroy: true,
@@ -51,7 +57,7 @@ impl tf::provider_server::Provider for Arc<Server> {
             diagnostics: self.init_diags.clone().into(),
             data_sources,
             resources,
-            functions: vec![],
+            functions,
         }))
     }
     async fn get_provider_schema(
@@ -70,6 +76,11 @@ impl tf::provider_server::Provider for Arc<Server> {
             .iter()
             .map(|(name, (_, schema))| (name.clone(), schema.into()))
             .collect();
+        let functions = self
+            .functions
+            .iter()
+            .map(|(name, (_, schema))| (name.clone(), schema.into()))
+            .collect();
 
         Ok(tonic::Response::new(tf::get_provider_schema::Response {
             provider: schema,
@@ -82,7 +93,7 @@ impl tf::provider_server::Provider for Arc<Server> {
                 get_provider_schema_optional: false,
                 move_resource_state: false,
             }),
-            functions: Default::default(),
+            functions,
         }))
     }
     async fn validate_provider_config(
@@ -476,21 +487,64 @@ impl tf::provider_server::Provider for Arc<Server> {
         &self,
         _request: tonic::Request<tf::get_functions::Request>,
     ) -> std::result::Result<tonic::Response<tf::get_functions::Response>, tonic::Status> {
+        let functions = self
+            .functions
+            .iter()
+            .map(|(name, (_, schema))| (name.clone(), schema.into()))
+            .collect();
         Ok(tonic::Response::new(tf::get_functions::Response {
-            diagnostics: vec![],
-            functions: Default::default(),
+            diagnostics: self.init_diags.clone().into(),
+            functions,
         }))
     }
     async fn call_function(
         &self,
-        _request: tonic::Request<tf::call_function::Request>,
+        request: tonic::Request<tf::call_function::Request>,
     ) -> std::result::Result<tonic::Response<tf::call_function::Response>, tonic::Status> {
+        let request = request.into_inner();
+        let mut diags = Diagnostics::default();
+
+        let result = if let Some(function) = self.get_function(&mut diags, &request.name) {
+            function
+                .call(
+                    &mut diags,
+                    request.arguments.into_iter().map(Into::into).collect(),
+                )
+                .await
+        } else {
+            None
+        }
+        .collect_diagnostics(&mut diags);
+
+        let (result, diag) = match (diags.errors.as_slice(), diags.warnings.as_slice()) {
+            ([], []) => (result, None),
+            ([], [diag, ..]) => (result, Some(diag)),
+            ([diag, ..], _) => (None, Some(diag)),
+        };
+
+        let error = diag.map(|diag| {
+            let text = diag.summary.to_string();
+            match diag.attribute.steps.as_slice() {
+                [AttributePathStep::Index(idx)] => tf::FunctionError {
+                    function_argument: Some(*idx),
+                    text,
+                },
+                [AttributePathStep::Attribute(_), AttributePathStep::Index(idx)] => {
+                    tf::FunctionError {
+                        function_argument: Some(*idx),
+                        text,
+                    }
+                }
+                _ => tf::FunctionError {
+                    function_argument: None,
+                    text,
+                },
+            }
+        });
+
         Ok(tonic::Response::new(tf::call_function::Response {
-            error: Some(tf::FunctionError {
-                function_argument: None,
-                text: "CallFunction is not implemented".to_owned(),
-            }),
-            result: None,
+            error,
+            result: result.map(Into::into),
         }))
     }
     /// ////// Graceful Shutdown

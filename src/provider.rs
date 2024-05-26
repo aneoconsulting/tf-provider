@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 use crate::data_source::DynamicDataSource;
 use crate::diagnostics::Diagnostics;
+use crate::function::DynamicFunction;
 use crate::raw::RawValue;
 use crate::resource::DynamicResource;
 use crate::schema::Schema;
@@ -37,7 +38,11 @@ pub trait Provider: Send + Sync + 'static {
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
 
     /// Validate the configuration of the provider
-    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::Config<'a>) -> Option<()>;
+    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::Config<'a>) -> Option<()> {
+        _ = diags;
+        _ = config;
+        Some(())
+    }
 
     /// Configure the provider
     async fn configure<'a>(
@@ -45,7 +50,12 @@ pub trait Provider: Send + Sync + 'static {
         diags: &mut Diagnostics,
         terraform_version: String,
         config: Self::Config<'a>,
-    ) -> Option<()>;
+    ) -> Option<()> {
+        _ = diags;
+        _ = terraform_version;
+        _ = config;
+        Some(())
+    }
 
     /// Get the schema for the provider metadata (defaults to empty)
     fn meta_schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
@@ -60,13 +70,28 @@ pub trait Provider: Send + Sync + 'static {
     fn get_resources(
         &self,
         diags: &mut Diagnostics,
-    ) -> Option<HashMap<String, Box<dyn DynamicResource>>>;
+    ) -> Option<HashMap<String, Box<dyn DynamicResource>>> {
+        _ = diags;
+        Some(HashMap::new())
+    }
 
     /// Get the data sources of the provider
     fn get_data_sources(
         &self,
         diags: &mut Diagnostics,
-    ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>>;
+    ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>> {
+        _ = diags;
+        Some(HashMap::new())
+    }
+
+    /// Get the functions of the provider
+    fn get_functions(
+        &self,
+        diags: &mut Diagnostics,
+    ) -> Option<HashMap<String, Box<dyn DynamicFunction>>> {
+        _ = diags;
+        Some(HashMap::new())
+    }
 }
 
 #[async_trait]
@@ -75,7 +100,11 @@ pub trait DynamicProvider: Send + Sync + 'static {
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
 
     /// Validate the configuration of the provider
-    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()> {
+        _ = diags;
+        _ = config;
+        Some(())
+    }
 
     /// Configure the provider
     async fn configure(
@@ -83,7 +112,12 @@ pub trait DynamicProvider: Send + Sync + 'static {
         diags: &mut Diagnostics,
         terraform_version: String,
         config: RawValue,
-    ) -> Option<()>;
+    ) -> Option<()> {
+        _ = diags;
+        _ = terraform_version;
+        _ = config;
+        Some(())
+    }
 
     /// Get the schema for the provider metadata (defaults to empty)
     fn meta_schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
@@ -98,13 +132,28 @@ pub trait DynamicProvider: Send + Sync + 'static {
     fn get_resources(
         &self,
         diags: &mut Diagnostics,
-    ) -> Option<HashMap<String, Box<dyn DynamicResource>>>;
+    ) -> Option<HashMap<String, Box<dyn DynamicResource>>> {
+        _ = diags;
+        Some(HashMap::new())
+    }
 
     /// Get the data sources of the provider
     fn get_data_sources(
         &self,
         diags: &mut Diagnostics,
-    ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>>;
+    ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>> {
+        _ = diags;
+        Some(HashMap::new())
+    }
+
+    /// Get the functions of the provider
+    fn get_functions(
+        &self,
+        diags: &mut Diagnostics,
+    ) -> Option<HashMap<String, Box<dyn DynamicFunction>>> {
+        _ = diags;
+        Some(HashMap::new())
+    }
 }
 
 #[async_trait]
@@ -150,6 +199,14 @@ impl<T: Provider> DynamicProvider for T {
         diags: &mut Diagnostics,
     ) -> Option<HashMap<String, Box<dyn DynamicDataSource>>> {
         <T as Provider>::get_data_sources(self, diags)
+    }
+
+    /// Get the functions of the provider
+    fn get_functions(
+        &self,
+        diags: &mut Diagnostics,
+    ) -> Option<HashMap<String, Box<dyn DynamicFunction>>> {
+        <T as Provider>::get_functions(self, diags)
     }
 }
 

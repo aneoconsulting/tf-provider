@@ -372,3 +372,152 @@ impl From<&Schema> for tfplugin6::Schema {
         }
     }
 }
+
+/// Type for a function parameter or return value
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum Type {
+    /// String
+    String,
+    /// Number (int or float)
+    Number,
+    /// Boolean
+    Bool,
+    /// List
+    List(Box<Type>),
+    /// Set
+    Set(Box<Type>),
+    /// Map
+    Map(Box<Type>),
+    /// Object
+    Object(HashMap<String, Type>),
+    /// Tuple
+    Tuple(Vec<Type>),
+    /// Dynamic (serialized into a json pair `[type, value]`)
+    Any,
+}
+
+impl Serialize for Type {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Type::String => serializer.serialize_str("string"),
+            Type::Number => serializer.serialize_str("number"),
+            Type::Bool => serializer.serialize_str("bool"),
+            Type::List(attr) => ("list", attr).serialize(serializer),
+            Type::Set(attr) => ("set", attr).serialize(serializer),
+            Type::Map(attr) => ("map", attr).serialize(serializer),
+            Type::Object(attrs) => ("object", attrs).serialize(serializer),
+            Type::Tuple(attrs) => ("tuple", attrs).serialize(serializer),
+            Type::Any => serializer.serialize_str("dynamic"),
+        }
+    }
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        return f.write_str(
+            serde_json::to_string(self)
+                .or(Err(std::fmt::Error))?
+                .as_str(),
+        );
+    }
+}
+
+/// Function parameter schema
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Parameter {
+    /// Name of the parameter
+    pub name: String,
+    /// Type of the parameter
+    pub param_type: Type,
+    /// Whether the parameter can be null or not
+    ///
+    /// When enabled denotes that a null argument value
+    /// can be passed to the provider. When disabled,
+    /// Terraform returns an error if the argument value is null.
+    pub allow_null: bool,
+    /// Whether the parameter can be unknown or not
+    ///
+    /// When enabled denotes that only wholly known
+    /// argument values will be passed to the provider. When disabled,
+    /// Terraform skips the function call entirely and assumes an unknown
+    /// value result from the function.
+    pub allow_unknown: bool,
+    /// Description of the argument
+    pub description: Description,
+}
+
+impl From<&Parameter> for tfplugin6::function::Parameter {
+    fn from(value: &Parameter) -> Self {
+        Self {
+            name: value.name.clone(),
+            r#type: value.param_type.to_string().into(),
+            allow_null_value: value.allow_null,
+            allow_unknown_values: value.allow_unknown,
+            description: value.description.content.clone(),
+            description_kind: match value.description.kind {
+                StringKind::Markdown => tfplugin6::StringKind::Markdown,
+                StringKind::Plain => tfplugin6::StringKind::Plain,
+            } as i32,
+        }
+    }
+}
+
+/// Function schema
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionSchema {
+    /// List of positional function parameters
+    pub parameters: Vec<Parameter>,
+    /// Optional final parameter which accepts
+    /// zero or more argument values, in which Terraform will send an
+    /// ordered list of the parameter type
+    pub variadic: Option<Parameter>,
+    /// Type constraint for the function result
+    pub return_type: Type,
+    /// Human-readable shortened documentation for the function
+    pub summary: String,
+    /// Description of the function
+    pub description: Description,
+    /// Whether the function deprecated
+    ///
+    /// If the function is deprecated, this field contains the deprecation message
+    pub deprecated: Option<String>,
+}
+
+impl Default for FunctionSchema {
+    fn default() -> Self {
+        Self {
+            parameters: Default::default(),
+            variadic: Default::default(),
+            return_type: Type::Any,
+            summary: Default::default(),
+            description: Description::plain(""),
+            deprecated: Default::default(),
+        }
+    }
+}
+
+impl From<&FunctionSchema> for tfplugin6::Function {
+    fn from(value: &FunctionSchema) -> Self {
+        Self {
+            parameters: value.parameters.iter().map(Into::into).collect(),
+            variadic_parameter: value.variadic.as_ref().map(Into::into),
+            r#return: Some(tfplugin6::function::Return {
+                r#type: value.return_type.to_string().into_bytes(),
+            }),
+            summary: value.summary.clone(),
+            description: value.description.content.clone(),
+            description_kind: match value.description.kind {
+                StringKind::Markdown => tfplugin6::StringKind::Markdown,
+                StringKind::Plain => tfplugin6::StringKind::Plain,
+            } as i32,
+            deprecation_message: match &value.deprecated {
+                Some(msg) if msg.is_empty() => "deprecated".to_owned(),
+                Some(msg) => msg.clone(),
+                None => String::new(),
+            },
+        }
+    }
+}
