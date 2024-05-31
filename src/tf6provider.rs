@@ -14,17 +14,53 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
+use crate::attribute_path::AttributePathStep;
 use crate::diagnostics::Diagnostics;
 use crate::raw::RawValue;
 use crate::server::Server;
 use crate::tfplugin6 as tf;
-use crate::tfplugin6::get_provider_schema::ServerCapabilities;
 use crate::utils::{CollectDiagnostics, OptionExpand};
 
 #[tonic::async_trait]
 impl tf::provider_server::Provider for Arc<Server> {
+    async fn get_metadata(
+        &self,
+        _request: tonic::Request<tf::get_metadata::Request>,
+    ) -> std::result::Result<tonic::Response<tf::get_metadata::Response>, tonic::Status> {
+        let resources = self
+            .resources
+            .keys()
+            .map(|name| tf::get_metadata::ResourceMetadata {
+                type_name: name.clone(),
+            })
+            .collect();
+        let data_sources = self
+            .data_sources
+            .keys()
+            .map(|name| tf::get_metadata::DataSourceMetadata {
+                type_name: name.clone(),
+            })
+            .collect();
+        let functions = self
+            .functions
+            .keys()
+            .map(|name| tf::get_metadata::FunctionMetadata { name: name.clone() })
+            .collect();
+        Ok(tonic::Response::new(tf::get_metadata::Response {
+            server_capabilities: Some(tf::ServerCapabilities {
+                plan_destroy: true,
+                get_provider_schema_optional: false,
+                move_resource_state: false,
+            }),
+            diagnostics: self.init_diags.clone().into(),
+            data_sources,
+            resources,
+            functions,
+        }))
+    }
     async fn get_provider_schema(
         &self,
         _request: tonic::Request<tf::get_provider_schema::Request>,
@@ -41,6 +77,11 @@ impl tf::provider_server::Provider for Arc<Server> {
             .iter()
             .map(|(name, (_, schema))| (name.clone(), schema.into()))
             .collect();
+        let functions = self
+            .functions
+            .iter()
+            .map(|(name, (_, schema))| (name.clone(), schema.into()))
+            .collect();
 
         Ok(tonic::Response::new(tf::get_provider_schema::Response {
             provider: schema,
@@ -48,7 +89,12 @@ impl tf::provider_server::Provider for Arc<Server> {
             data_source_schemas: data_sources,
             diagnostics: self.init_diags.clone().into(),
             provider_meta: meta_schema,
-            server_capabilities: Some(ServerCapabilities { plan_destroy: true }),
+            server_capabilities: Some(tf::ServerCapabilities {
+                plan_destroy: true,
+                get_provider_schema_optional: false,
+                move_resource_state: false,
+            }),
+            functions,
         }))
     }
     async fn validate_provider_config(
@@ -399,6 +445,20 @@ impl tf::provider_server::Provider for Arc<Server> {
             diagnostics: diags.into(),
         }))
     }
+
+    async fn move_resource_state(
+        &self,
+        _request: tonic::Request<tf::move_resource_state::Request>,
+    ) -> std::result::Result<tonic::Response<tf::move_resource_state::Response>, tonic::Status>
+    {
+        let mut diags = Diagnostics::default();
+        diags.root_error_short("MoveResourceState is not implemented");
+        Ok(tonic::Response::new(tf::move_resource_state::Response {
+            diagnostics: diags.into(),
+            target_private: vec![],
+            target_state: None,
+        }))
+    }
     async fn read_data_source(
         &self,
         request: tonic::Request<tf::read_data_source::Request>,
@@ -422,6 +482,113 @@ impl tf::provider_server::Provider for Arc<Server> {
         Ok(tonic::Response::new(tf::read_data_source::Response {
             state: state.map(Into::into),
             diagnostics: diags.into(),
+        }))
+    }
+    async fn get_functions(
+        &self,
+        _request: tonic::Request<tf::get_functions::Request>,
+    ) -> std::result::Result<tonic::Response<tf::get_functions::Response>, tonic::Status> {
+        let functions = self
+            .functions
+            .iter()
+            .map(|(name, (_, schema))| (name.clone(), schema.into()))
+            .collect();
+        Ok(tonic::Response::new(tf::get_functions::Response {
+            diagnostics: self.init_diags.clone().into(),
+            functions,
+        }))
+    }
+    async fn call_function(
+        &self,
+        request: tonic::Request<tf::call_function::Request>,
+    ) -> std::result::Result<tonic::Response<tf::call_function::Response>, tonic::Status> {
+        let request = request.into_inner();
+        let mut diags = Diagnostics::default();
+
+        let result = if let Some(function) = self.get_function(&mut diags, &request.name) {
+            function
+                .call(
+                    &mut diags,
+                    request.arguments.into_iter().map(Into::into).collect(),
+                )
+                .await
+        } else {
+            None
+        }
+        .collect_diagnostics(&mut diags);
+
+        #[derive(Debug, Clone, Copy)]
+        enum Index {
+            None,
+            Mixed,
+            Unique(i64),
+        }
+
+        // Check if all diagnostics have the same index, if any
+        let mut idx = Index::None;
+        for diag in [&diags.errors, &diags.warnings].into_iter().flatten() {
+            match (idx, diag.attribute.steps.as_slice()) {
+                (Index::None, [AttributePathStep::Index(j)]) => {
+                    idx = Index::Unique(*j);
+                }
+                (Index::Unique(i), [AttributePathStep::Index(j)]) if i == *j => (),
+                _ => {
+                    idx = Index::Mixed;
+                }
+            }
+        }
+
+        if diags.errors.is_empty() && !diags.warnings.is_empty() {
+            diags.root_error_short("Function has emitted warnings");
+        }
+
+        // Format error message
+        let (result, error) = if diags.errors.is_empty() {
+            (result, None)
+        } else {
+            let mut message = String::new();
+            let has_warnings = !diags.warnings.is_empty();
+            for (diags, warning) in [(&diags.errors, false), (&diags.warnings, true)].into_iter() {
+                let prefix = match (warning, has_warnings) {
+                    (true, _) => "Warning: ",
+                    (false, true) => "Error: ",
+                    (false, false) => "",
+                };
+
+                for diag in diags {
+                    if !message.is_empty() {
+                        _ = writeln!(&mut message);
+                    }
+                    _ = write!(&mut message, "{prefix}");
+
+                    if let (Index::None | Index::Mixed, [AttributePathStep::Index(j)]) =
+                        (idx, diag.attribute.steps.as_slice())
+                    {
+                        _ = write!(&mut message, "Argument #{}: ", *j + 1);
+                    };
+                    _ = write!(&mut message, "{}", diag.summary);
+                    if !diag.detail.is_empty() {
+                        _ = write!(&mut message, "\n  {}", diag.detail);
+                    }
+                }
+            }
+
+            (
+                None,
+                Some(tf::FunctionError {
+                    text: message,
+                    function_argument: if let Index::Unique(i) = idx {
+                        Some(i)
+                    } else {
+                        None
+                    },
+                }),
+            )
+        };
+
+        Ok(tonic::Response::new(tf::call_function::Response {
+            error,
+            result: result.map(Into::into),
         }))
     }
     /// ////// Graceful Shutdown

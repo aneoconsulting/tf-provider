@@ -17,6 +17,7 @@
 pub mod attribute_path;
 pub mod data_source;
 pub mod diagnostics;
+pub mod function;
 pub mod plugin;
 pub mod provider;
 pub mod raw;
@@ -35,6 +36,7 @@ mod tfplugin6 {
 pub use attribute_path::AttributePath;
 pub use data_source::DataSource;
 pub use diagnostics::Diagnostics;
+pub use function::Function;
 pub use provider::Provider;
 pub use resource::Resource;
 pub use schema::{

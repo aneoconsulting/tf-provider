@@ -31,9 +31,11 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::{Identity, ServerTlsConfig};
 use tower_http::trace::TraceLayer;
 
+use crate::function::DynamicFunction;
 use crate::plugin::grpc_broker_server::GrpcBrokerServer;
 use crate::plugin::grpc_controller_server::GrpcControllerServer;
 use crate::plugin::grpc_stdio_server::GrpcStdioServer;
+use crate::schema::FunctionSchema;
 use crate::tfplugin6::provider_server::ProviderServer;
 
 use crate::data_source::DynamicDataSource;
@@ -54,6 +56,7 @@ pub struct Server {
     pub(crate) meta_schema: Option<Schema>,
     pub(crate) resources: HashMap<String, (Box<dyn DynamicResource>, Schema)>,
     pub(crate) data_sources: HashMap<String, (Box<dyn DynamicDataSource>, Schema)>,
+    pub(crate) functions: HashMap<String, (Box<dyn DynamicFunction>, FunctionSchema)>,
 }
 
 impl Server {
@@ -84,6 +87,18 @@ impl Server {
                 Some((format!("{}_{}", provider_name, name), (data_source, schema)))
             })
             .collect();
+        let functions = provider
+            .get_functions(&mut diags)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(name, function)| match function.schema(&mut diags) {
+                Some(schema) => Some((name, (function, schema))),
+                None => {
+                    has_errors = true;
+                    None
+                }
+            })
+            .collect();
 
         if has_errors {
             diags.internal_error()
@@ -98,6 +113,7 @@ impl Server {
             meta_schema,
             resources,
             data_sources,
+            functions,
         }
     }
 
@@ -122,6 +138,18 @@ impl Server {
             Some(data_source.0.as_ref())
         } else {
             diags.root_error_short(format!("Could not find data source `{}` in provider", name));
+            None
+        }
+    }
+    pub(crate) fn get_function<'a>(
+        &'a self,
+        diags: &mut Diagnostics,
+        name: &str,
+    ) -> Option<&'a dyn DynamicFunction> {
+        if let Some(function) = self.functions.get(name) {
+            Some(function.0.as_ref())
+        } else {
+            diags.root_error_short(format!("Could not find function `{}` in provider", name));
             None
         }
     }

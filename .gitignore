@@ -2,6 +2,7 @@ target
 .nix-gcroots
 .direnv
 .vscode
+terraform
 .terraform
 .terraform.*
 terraform.tfstate
