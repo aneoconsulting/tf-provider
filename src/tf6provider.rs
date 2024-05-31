@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use crate::attribute_path::AttributePathStep;
@@ -516,25 +517,74 @@ impl tf::provider_server::Provider for Arc<Server> {
         }
         .collect_diagnostics(&mut diags);
 
-        let (result, diag) = match (diags.errors.as_slice(), diags.warnings.as_slice()) {
-            ([], []) => (result, None),
-            ([], [diag, ..]) => (result, Some(diag)),
-            ([diag, ..], _) => (None, Some(diag)),
-        };
+        #[derive(Debug, Clone, Copy)]
+        enum Index {
+            None,
+            Mixed,
+            Unique(i64),
+        }
 
-        let error = diag.map(|diag| {
-            let text = diag.summary.to_string();
-            match diag.attribute.steps.as_slice() {
-                [AttributePathStep::Index(idx)] => tf::FunctionError {
-                    function_argument: Some(*idx),
-                    text,
-                },
-                _ => tf::FunctionError {
-                    function_argument: None,
-                    text,
-                },
+        // Check if all diagnostics have the same index, if any
+        let mut idx = Index::None;
+        for diag in [&diags.errors, &diags.warnings].into_iter().flatten() {
+            match (idx, diag.attribute.steps.as_slice()) {
+                (Index::None, [AttributePathStep::Index(j)]) => {
+                    idx = Index::Unique(*j);
+                }
+                (Index::Unique(i), [AttributePathStep::Index(j)]) if i == *j => (),
+                _ => {
+                    idx = Index::Mixed;
+                }
             }
-        });
+        }
+
+        if diags.errors.is_empty() && !diags.warnings.is_empty() {
+            diags.root_error_short("Function has emitted warnings");
+        }
+
+        // Format error message
+        let (result, error) = if diags.errors.is_empty() {
+            (result, None)
+        } else {
+            let mut message = String::new();
+            let has_warnings = !diags.warnings.is_empty();
+            for (diags, warning) in [(&diags.errors, false), (&diags.warnings, true)].into_iter() {
+                let prefix = match (warning, has_warnings) {
+                    (true, _) => "Warning: ",
+                    (false, true) => "Error: ",
+                    (false, false) => "",
+                };
+
+                for diag in diags {
+                    if !message.is_empty() {
+                        _ = writeln!(&mut message);
+                    }
+                    _ = write!(&mut message, "{prefix}");
+
+                    if let (Index::None | Index::Mixed, [AttributePathStep::Index(j)]) =
+                        (idx, diag.attribute.steps.as_slice())
+                    {
+                        _ = write!(&mut message, "Argument #{}: ", *j + 1);
+                    };
+                    _ = write!(&mut message, "{}", diag.summary);
+                    if !diag.detail.is_empty() {
+                        _ = write!(&mut message, "\n  {}", diag.detail);
+                    }
+                }
+            }
+
+            (
+                None,
+                Some(tf::FunctionError {
+                    text: message,
+                    function_argument: if let Index::Unique(i) = idx {
+                        Some(i)
+                    } else {
+                        None
+                    },
+                }),
+            )
+        };
 
         Ok(tonic::Response::new(tf::call_function::Response {
             error,
