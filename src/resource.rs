@@ -70,7 +70,7 @@ pub trait Resource: Send + Sync {
         prior_state: Self::State<'a>,
         prior_private_state: Self::PrivateState<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
-    ) -> Option<()>;
+    ) -> Option<Self::PrivateState<'a>>;
     /// Create a new resource
     async fn create<'a>(
         &self,
@@ -95,6 +95,7 @@ pub trait Resource: Send + Sync {
         &self,
         diags: &mut Diagnostics,
         prior_state: Self::State<'a>,
+        planned_private_state: Self::PrivateState<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()>;
     /// Import an existing resource
@@ -160,7 +161,7 @@ pub trait DynamicResource: Send + Sync {
         prior_state: RawValue,
         prior_private_state: Vec<u8>,
         provider_meta_state: RawValue,
-    ) -> Option<()>;
+    ) -> Option<Vec<u8>>;
     /// Create a new resource
     async fn create(
         &self,
@@ -185,6 +186,7 @@ pub trait DynamicResource: Send + Sync {
         &self,
         diags: &mut Diagnostics,
         prior_state: RawValue,
+        planned_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<()>;
     /// Import an existing resource
@@ -319,7 +321,7 @@ impl<T: Resource> DynamicResource for T {
         prior_state: RawValue,
         prior_private_state: Vec<u8>,
         provider_meta_state: RawValue,
-    ) -> Option<()> {
+    ) -> Option<Vec<u8>> {
         let prior_private_state = RawValue::MessagePack(prior_private_state);
         let (prior_state, prior_private_state, provider_meta_state) = (
             prior_state.deserialize(diags),
@@ -328,14 +330,16 @@ impl<T: Resource> DynamicResource for T {
         )
             .factor()?;
 
-        <T as Resource>::plan_destroy(
+        let private_state = <T as Resource>::plan_destroy(
             self,
             diags,
             prior_state,
             prior_private_state,
             provider_meta_state,
         )
-        .await
+        .await?;
+
+        RawValue::serialize_vec(diags, &private_state)
     }
     /// Create a new resource
     async fn create(
@@ -410,14 +414,25 @@ impl<T: Resource> DynamicResource for T {
         &self,
         diags: &mut Diagnostics,
         prior_state: RawValue,
+        planned_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<()> {
-        let (prior_state, provider_meta_state) = (
+        let planned_private_state = RawValue::MessagePack(planned_private_state);
+        let (prior_state, planned_private_state, provider_meta_state) = (
             prior_state.deserialize(diags),
+            planned_private_state.deserialize(diags),
             provider_meta_state.deserialize(diags),
         )
             .factor()?;
-        <T as Resource>::destroy(self, diags, prior_state, provider_meta_state).await
+
+        <T as Resource>::destroy(
+            self,
+            diags,
+            prior_state,
+            planned_private_state,
+            provider_meta_state,
+        )
+        .await
     }
     /// Import an existing resource
     async fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(RawValue, Vec<u8>)> {
