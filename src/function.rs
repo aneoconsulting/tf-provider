@@ -14,19 +14,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`Function`] module
 use async_trait::async_trait;
 use serde::{de, Deserialize, Serialize};
 
 use crate::{raw::RawValue, schema::FunctionSchema, Diagnostics};
 
 #[async_trait]
+/// Trait for implementing a function with automatic serialization/deserialization
+///
+/// See also: [`DynamicFunction`]
 pub trait Function: Send + Sync {
+    /// Function Input
+    ///
+    /// The input will be automatically serialized/deserialized at the border of the request.
     type Input<'a>: Deserialize<'a> + Send;
+
+    /// Function Output
+    ///
+    /// The output will be automatically serialized/deserialized at the border of the request.
     type Output<'a>: Serialize + Send;
 
     /// Get the schema of the function
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn schema(&self, diags: &mut Diagnostics) -> Option<FunctionSchema>;
-    /// CallFunction
+
+    /// Call Function
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when calling the function
+    /// * `params` - Function parameters packed into the input type
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn call<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -35,10 +66,33 @@ pub trait Function: Send + Sync {
 }
 
 #[async_trait]
+/// Trait for implementing a function *without* automatic serialization/deserialization
+///
+/// See also: [`Function`]
 pub trait DynamicFunction: Send + Sync {
     /// Get the schema of the function
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn schema(&self, diags: &mut Diagnostics) -> Option<FunctionSchema>;
-    /// CallFunction
+
+    /// Call Function
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when calling the function
+    /// * `params` - Function parameters
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn call<'a>(&self, diags: &mut Diagnostics, params: Vec<RawValue>) -> Option<RawValue>;
 }
 

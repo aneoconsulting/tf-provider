@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`Resource`] module
+
 use crate::attribute_path::AttributePath;
 use crate::diagnostics::Diagnostics;
 use crate::raw::RawValue;
@@ -23,25 +25,68 @@ use crate::utils::OptionFactor;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-/// Trait for implementing a resource
+/// Trait for implementing a resource with automatic serialization/deserialization
+///
+/// See also: [`DynamicResource`]
 #[async_trait]
 pub trait Resource: Send + Sync {
     /// State of the resource
+    ///
+    /// The state will be automatically serialized/deserialized at the border of the request.
     type State<'a>: Serialize + Deserialize<'a> + Send;
+
     /// Private state of the resource
+    ///
+    /// The private state will be automatically serialized/deserialized at the border of the request.
     type PrivateState<'a>: Serialize + Deserialize<'a> + Send;
+
     /// State of the provider metadata
+    ///
+    /// The state will be automatically serialized/deserialized at the border of the request.
     type ProviderMetaState<'a>: Serialize + Deserialize<'a> + Send;
 
     /// Get the schema of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
+
     /// Validate the configuration of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during validation
+    /// * `config` - State as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()> {
         _ = diags;
         _ = config;
         Some(())
     }
+
     /// Read the new state of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the read
+    /// * `state` - State as stored in the Terraform state
+    /// * `private_state` - Private state as stored in the Terraform state
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// Return must be [`None`] if the resource has been destroyed externally.
+    /// Return must be [`Some`] if the resource is still there, even if there was errors while reading the resource.
     async fn read<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -49,7 +94,20 @@ pub trait Resource: Send + Sync {
         private_state: Self::PrivateState<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)>;
+
     /// Plan the creation of a new resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the plan
+    /// * `proposed_state` - State proposed by Terraform
+    /// * `config_state` - State as declared in the Terraform file
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn plan_create<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -57,7 +115,22 @@ pub trait Resource: Send + Sync {
         config_state: Self::State<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)>;
+
     /// Plan the changes on the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the plan
+    /// * `prior_state` - State as stored in the Terraform state
+    /// * `proposed_state` - State proposed by Terraform
+    /// * `config_state` - State as declared in the Terraform file
+    /// * `private_state` - Private state as stored in the Terraform state
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn plan_update<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -67,7 +140,20 @@ pub trait Resource: Send + Sync {
         prior_private_state: Self::PrivateState<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>, Vec<AttributePath>)>;
+
     /// Plan the destruction of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the plan
+    /// * `prior_state` - State as stored in the Terraform state
+    /// * `prior_private_state` - Private state as stored in the Terraform state
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn plan_destroy<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -75,7 +161,21 @@ pub trait Resource: Send + Sync {
         prior_private_state: Self::PrivateState<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<Self::PrivateState<'a>>;
+
     /// Create a new resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the creation
+    /// * `planned_state` - State proposed by the provider upon plan
+    /// * `config_state` - State as declared in the Terraform file
+    /// * `planned_private_state` - Private state proposed by the provider upon plan
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn create<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -84,7 +184,22 @@ pub trait Resource: Send + Sync {
         planned_private_state: Self::PrivateState<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)>;
+
     /// Apply the changes on the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the update
+    /// * `prior_state` - State as stored in the Terraform state
+    /// * `planned_state` - State proposed by the provider upon plan
+    /// * `config_state` - State as declared in the Terraform file
+    /// * `planned_private_state` - Private state proposed by the provider upon plan
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn update<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -94,7 +209,20 @@ pub trait Resource: Send + Sync {
         planned_private_state: Self::PrivateState<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)>;
+
     /// Destroy the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the destruction
+    /// * `prior_state` - State as stored in the Terraform state
+    /// * `planned_private_state` - Private state proposed by the provider upon plan
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn destroy<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -102,7 +230,18 @@ pub trait Resource: Send + Sync {
         planned_private_state: Self::PrivateState<'a>,
         provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()>;
+
     /// Import an existing resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the import
+    /// * `id` - Opaque string that the provider can use to identify the actual resource to import
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn import<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -112,7 +251,19 @@ pub trait Resource: Send + Sync {
         diags.root_error_short("Import is not supported");
         None
     }
-    /// Upgrade the resource
+
+    /// Upgrade the resource from a prior version of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the import
+    /// * `version` - Prior version of the resource to upgrade as recorded in Terraform state
+    /// * `prior_state` - Prior state of the resource to upgrade as recorded in Terraform state
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn upgrade<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -126,17 +277,53 @@ pub trait Resource: Send + Sync {
     }
 }
 
+/// Trait for implementing a resource *without* automatic serialization/deserialization
+///
+/// See also: [`Resource`]
 #[async_trait]
 pub trait DynamicResource: Send + Sync {
     /// Get the schema of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
+
     /// Validate the configuration of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during validation
+    /// * `config` - State as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()> {
         _ = diags;
         _ = config;
         Some(())
     }
+
     /// Read the new state of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the read
+    /// * `state` - State as stored in the Terraform state
+    /// * `private_state` - Private state as stored in the Terraform state
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// Return must be [`None`] if the resource has been destroyed externally.
+    /// Return must be [`Some`] if the resource is still there, even if there was errors while reading the resource.
     async fn read(
         &self,
         diags: &mut Diagnostics,
@@ -144,7 +331,20 @@ pub trait DynamicResource: Send + Sync {
         private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>)>;
+
     /// Plan the creation of a new resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the plan
+    /// * `proposed_state` - State proposed by Terraform
+    /// * `config_state` - State as declared in the Terraform file
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn plan_create(
         &self,
         diags: &mut Diagnostics,
@@ -152,7 +352,22 @@ pub trait DynamicResource: Send + Sync {
         config_state: RawValue,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>)>;
+
     /// Plan the changes on the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the plan
+    /// * `prior_state` - State as stored in the Terraform state
+    /// * `proposed_state` - State proposed by Terraform
+    /// * `config_state` - State as declared in the Terraform file
+    /// * `private_state` - Private state as stored in the Terraform state
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn plan_update(
         &self,
         diags: &mut Diagnostics,
@@ -162,7 +377,20 @@ pub trait DynamicResource: Send + Sync {
         prior_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>, Vec<AttributePath>)>;
+
     /// Plan the destruction of the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the plan
+    /// * `prior_state` - State as stored in the Terraform state
+    /// * `prior_private_state` - Private state as stored in the Terraform state
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn plan_destroy(
         &self,
         diags: &mut Diagnostics,
@@ -170,7 +398,21 @@ pub trait DynamicResource: Send + Sync {
         prior_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<Vec<u8>>;
+
     /// Create a new resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the creation
+    /// * `planned_state` - State proposed by the provider upon plan
+    /// * `config_state` - State as declared in the Terraform file
+    /// * `planned_private_state` - Private state proposed by the provider upon plan
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn create(
         &self,
         diags: &mut Diagnostics,
@@ -179,7 +421,22 @@ pub trait DynamicResource: Send + Sync {
         planned_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>)>;
+
     /// Apply the changes on the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the update
+    /// * `prior_state` - State as stored in the Terraform state
+    /// * `planned_state` - State proposed by the provider upon plan
+    /// * `config_state` - State as declared in the Terraform file
+    /// * `planned_private_state` - Private state proposed by the provider upon plan
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn update(
         &self,
         diags: &mut Diagnostics,
@@ -189,7 +446,20 @@ pub trait DynamicResource: Send + Sync {
         planned_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<(RawValue, Vec<u8>)>;
+
     /// Destroy the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the destruction
+    /// * `prior_state` - State as stored in the Terraform state
+    /// * `planned_private_state` - Private state proposed by the provider upon plan
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn destroy(
         &self,
         diags: &mut Diagnostics,
@@ -197,13 +467,36 @@ pub trait DynamicResource: Send + Sync {
         planned_private_state: Vec<u8>,
         provider_meta_state: RawValue,
     ) -> Option<()>;
+
     /// Import an existing resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the import
+    /// * `id` - Opaque string that the provider can use to identify the actual resource to import
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(RawValue, Vec<u8>)> {
         _ = id;
         diags.root_error_short("Import is not supported");
         None
     }
+
     /// Upgrade the resource
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the import
+    /// * `version` - Prior version of the resource to upgrade as recorded in Terraform state
+    /// * `prior_state` - Prior state of the resource to upgrade as recorded in Terraform state
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn upgrade(
         &self,
         diags: &mut Diagnostics,

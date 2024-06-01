@@ -22,10 +22,11 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
-use tf_provider::{
-    map, serve, Attribute, AttributeConstraint, AttributePath, AttributeType, Block, Description,
-    Diagnostics, Provider, Resource, Schema, ValueEmpty, ValueMap, ValueString,
+use tf_provider::schema::{
+    Attribute, AttributeConstraint, AttributeType, Block, Description, Schema,
 };
+use tf_provider::value::{ValueEmpty, ValueMap, ValueString};
+use tf_provider::{map, serve, AttributePath, Diagnostics, Provider, Resource};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NullState<'a> {
@@ -105,7 +106,7 @@ impl Resource for NullResource {
     ) -> Option<(
         Self::State<'a>,
         Self::PrivateState<'a>,
-        Vec<tf_provider::attribute_path::AttributePath>,
+        Vec<tf_provider::AttributePath>,
     )> {
         let mut trigger_replace = Vec::new();
         if proposed_state.triggers != prior_state.triggers {
@@ -174,7 +175,7 @@ impl Provider for NullProvider {
     type Config<'a> = ValueEmpty;
     type MetaState<'a> = ValueEmpty;
 
-    fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<tf_provider::Schema> {
+    fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<tf_provider::schema::Schema> {
         Some(Schema {
             version: 1,
             block: Block {
@@ -204,8 +205,7 @@ impl Provider for NullProvider {
     fn get_resources(
         &self,
         _diags: &mut tf_provider::Diagnostics,
-    ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::resource::DynamicResource>>>
-    {
+    ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::DynamicResource>>> {
         Some(map! {
             "resource" => NullResource,
         })
@@ -214,9 +214,7 @@ impl Provider for NullProvider {
     fn get_data_sources(
         &self,
         _diags: &mut tf_provider::Diagnostics,
-    ) -> Option<
-        std::collections::HashMap<String, Box<dyn tf_provider::data_source::DynamicDataSource>>,
-    > {
+    ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::DynamicDataSource>>> {
         Some(map! {})
     }
 }

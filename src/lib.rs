@@ -14,40 +14,58 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod attribute_path;
-pub mod data_source;
-pub mod diagnostics;
-pub mod function;
-pub mod plugin;
-pub mod provider;
-pub mod raw;
-pub mod resource;
-pub mod schema;
-pub mod server;
-pub mod tf6provider;
-pub mod value;
+//! Terraform provider library
+//!
+//! It enables to write your own TF provider that is supported by both Terraform and OpenTofu.
+//!
+//! Implementing a provider consists in implementing the [`Resource`], [`DataSource`], and/or [`Function`] traits,
+//! and implementing the [`Provider`] trait that references the resources, data sources and functions.
 
+mod attribute_path;
+mod data_source;
+mod diagnostics;
+mod function;
+mod plugin;
+mod provider;
+mod raw;
+mod resource;
+mod server;
+mod tf6provider;
 mod utils;
+
+pub mod schema;
+pub mod value;
 
 mod tfplugin6 {
     tonic::include_proto!("tfplugin6");
 }
 
-pub use attribute_path::AttributePath;
-pub use data_source::DataSource;
-pub use diagnostics::Diagnostics;
-pub use function::Function;
-pub use provider::Provider;
-pub use resource::Resource;
-pub use schema::{
-    Attribute, AttributeConstraint, AttributeType, Block, Description, NestedBlock, Schema,
-};
-pub use server::serve;
-pub use value::{
-    Value, ValueAny, ValueEmpty, ValueList, ValueMap, ValueNumber, ValueSet, ValueString,
-};
+pub use attribute_path::{AttributePath, AttributePathStep};
+pub use data_source::{DataSource, DynamicDataSource};
+pub use diagnostics::{Diagnostic, Diagnostics};
+pub use function::{DynamicFunction, Function};
+pub use provider::{DynamicProvider, Provider};
+pub use resource::{DynamicResource, Resource};
+pub use server::{serve, serve_dynamic};
 
 #[macro_export]
+/// Build a hash map
+///
+/// # Examples
+///
+/// ```
+/// # use tf_provider::map;
+/// # use std::collections::HashMap;
+/// let m: HashMap<String, String> = map!{
+///     "key1" => "value1",
+///     "key2" => "value2",
+/// };
+/// ```
+///
+/// # Remarks
+///
+/// Keys and Values are converted with [`Into::into`] to build the map.
+/// Because of that, type annotations are usually required.
 macro_rules! map {
     {$($key:expr => $value:expr),*} => {
         {

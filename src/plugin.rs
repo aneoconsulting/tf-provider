@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Implementation of all the TF plugin gRPC services
+
 use std::pin::Pin;
 use std::{fmt::Write, sync::Arc};
 

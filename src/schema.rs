@@ -23,15 +23,18 @@ use crate::tfplugin6;
 /// Specify if a description must interpreted as markdown or plain
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub enum StringKind {
+    /// No formatting
     #[default]
     Plain = 0,
+
+    /// Markdown formatting
     Markdown = 1,
 }
 
 /// Description
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Description {
-    /// Kind of the description (either `Plain` or `Markdown`)
+    /// Kind of the description (either [`StringKind::Plain`] or [`StringKind::Markdown`])
     pub kind: StringKind,
     /// Content of the description
     pub content: String,
@@ -39,6 +42,10 @@ pub struct Description {
 
 impl Description {
     /// Create a plain description
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - Content of the description
     pub fn plain<T>(content: T) -> Self
     where
         T: ToString,
@@ -49,6 +56,10 @@ impl Description {
         }
     }
     /// Create a markdown description
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - Content of the description
     pub fn markdown<T>(content: T) -> Self
     where
         T: ToString,
@@ -86,7 +97,7 @@ pub enum NestedBlock {
     /// This is implemented with a list block, and must be serialized with `value::serde_as_vec`
     /// ```
     /// # use serde::{Serialize, Deserialize};
-    /// use tf_provider::{value, Value};
+    /// use tf_provider::value::{self, Value};
     ///
     /// #[derive(Serialize, Deserialize)]
     /// struct MyBlock {

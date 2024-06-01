@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`Server`] module
+
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -42,11 +44,12 @@ use crate::data_source::DynamicDataSource;
 use crate::plugin::GrpcIo;
 use crate::provider::DynamicProvider;
 use crate::resource::DynamicResource;
-use crate::{Diagnostics, Schema};
+use crate::{schema::Schema, Diagnostics};
 
 const CORE_PROTOCOL_VERSION: u8 = 1;
 
-pub struct Server {
+/// TF provider server
+pub(crate) struct Server {
     pub(crate) provider: Box<dyn DynamicProvider>,
     pub(crate) io: GrpcIo,
     pub(crate) cancellation_token: CancellationToken,
@@ -155,16 +158,43 @@ impl Server {
     }
 }
 
+/// Serve the provider
+///
+/// # Arguments
+///
+/// * `name` - Name of the provider to serve
+/// * `provider` - Provider to be served
+///
+/// # Cancel Safety
+///
+/// It is not safe to cancel the output future
+///
+/// # See Also
+///
+/// [`serve_dynamic`]
 pub async fn serve<U: ToString, V: DynamicProvider>(name: U, provider: V) -> Result<()> {
     serve_dynamic(name.to_string(), Box::new(provider)).await
 }
-
+/// Serve the provider
+///
+/// # Arguments
+///
+/// * `name` - Name of the provider to serve
+/// * `provider` - Provider to be served
+///
+/// # Cancel Safety
+///
+/// It is not safe to cancel the output future
+///
+/// # See Also
+///
+/// [`serve`]
 pub async fn serve_dynamic(name: String, provider: Box<dyn DynamicProvider>) -> Result<()> {
     let server = Arc::new(Server::new(name, provider));
     let addrs = SockAddrIter::new()?;
     let (tcp_stream, endpoint) = listen(addrs)?;
 
-    if let Ok(path) = env::var("GENERIC_PROVIDER_LOG_FILE") {
+    if let Ok(path) = env::var("PLUGIN_LOG_FILE") {
         let log_file = File::create(path)?;
         tracing_subscriber::fmt()
             .with_max_level(tracing::Level::TRACE)

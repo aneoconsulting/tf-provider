@@ -14,11 +14,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`AttributePath`] module
+
 use std::{borrow::Cow, fmt::Display};
 
 use crate::tfplugin6;
 
 /// Represent the path to an attribute
+///
+/// # Example
+///
+/// ```
+/// # use tf_provider::AttributePath;
+/// let path = AttributePath::new("foo").key("bar").attribute("array").index(1);
+/// // foo["bar"].array[1]
+/// ```
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub struct AttributePath {
     pub steps: Vec<AttributePathStep>,
@@ -26,54 +36,94 @@ pub struct AttributePath {
 
 impl AttributePath {
     /// Create a new attribute path with the `root` attribute
+    ///
+    /// # Arguments
+    ///
+    /// * `root` - Name of the root attribute
     pub fn new<T: Into<Cow<'static, str>>>(root: T) -> Self {
         Self {
             steps: vec![AttributePathStep::Attribute(root.into())],
         }
     }
     /// Create a new attribute path for a function argument
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - index of the function argument
     pub fn function_argument(index: i64) -> Self {
         Self {
             steps: vec![AttributePathStep::Index(index)],
         }
     }
     /// Create a new attribute path where the attribute `.name` has been appended
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - name of the attribute
     pub fn attribute<T: Into<Cow<'static, str>>>(mut self, name: T) -> Self {
         self.add_attribute(name);
         self
     }
     /// Create a new attribute path where the access `["key"]` has been appended
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - string subscript
     pub fn key<T: Into<Cow<'static, str>>>(mut self, key: T) -> Self {
         self.add_key(key);
         self
     }
     /// Create a new attribute path where the access `[idx]` has been appended
+    ///
+    /// # Arguments
+    ///
+    /// * `idx` - integer subscript
     pub fn index<T: Into<i64>>(mut self, idx: T) -> Self {
         self.add_index(idx);
         self
     }
 
-    /// add name access to the path (ie: `.name`)
+    /// Add name access to the path (ie: `.name`)
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - name of the attribute
     pub fn add_attribute<T: Into<Cow<'static, str>>>(&mut self, name: T) -> &mut Self {
         self.steps.push(AttributePathStep::Attribute(name.into()));
         self
     }
     /// add key access to the path (ie: `["key"]`)
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - string subscript
     pub fn add_key<T: Into<Cow<'static, str>>>(&mut self, key: T) -> &mut Self {
         self.steps.push(AttributePathStep::Key(key.into()));
         self
     }
     /// add index access to the path (ie: `[idx]`)
+    ///
+    /// # Arguments
+    ///
+    /// * `idx` - integer subscript
     pub fn add_index<T: Into<i64>>(&mut self, idx: T) -> &mut Self {
         self.steps.push(AttributePathStep::Index(idx.into()));
         self
     }
     /// Add step to the path
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - step to add
     pub fn add_step(&mut self, step: AttributePathStep) -> &mut Self {
         self.steps.push(step);
         self
     }
     /// Add multiple steps into the path
+    ///
+    /// # Arguments
+    ///
+    /// * `steps` - steps to add
     pub fn add_steps(&mut self, mut steps: AttributePath) -> &mut Self {
         self.steps.append(&mut steps.steps);
         self
@@ -125,10 +175,14 @@ impl From<AttributePath> for tfplugin6::AttributePath {
     }
 }
 
+/// Single step of an [`AttributePath`]
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum AttributePathStep {
+    /// Attribute access: `.foo`
     Attribute(Cow<'static, str>),
+    /// String subscript: `["foo"]`
     Key(Cow<'static, str>),
+    /// Integer subscript: `[1]`
     Index(i64),
 }
 

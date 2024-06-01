@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Implementation of TF gRPC services for the version 6 of the protocol
+
 use std::fmt::Write;
 use std::sync::Arc;
 
