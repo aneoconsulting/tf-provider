@@ -119,10 +119,10 @@ impl Resource for NullResource {
         &self,
         _diags: &mut Diagnostics,
         _prior_state: Self::State<'a>,
-        _prior_private_state: Self::PrivateState<'a>,
+        prior_private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
-    ) -> Option<()> {
-        Some(())
+    ) -> Option<Self::PrivateState<'a>> {
+        Some(prior_private_state)
     }
 
     async fn create<'a>(
@@ -159,6 +159,7 @@ impl Resource for NullResource {
         &self,
         _diags: &mut Diagnostics,
         _state: Self::State<'a>,
+        _private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<()> {
         Some(())

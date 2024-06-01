@@ -292,7 +292,7 @@ impl tf::provider_server::Provider for Arc<Server> {
                         .await
                 }
                 (false, true, true) => {
-                    resource
+                    let planned_private = resource
                         .plan_destroy(
                             &mut diags,
                             prior_state,
@@ -300,7 +300,11 @@ impl tf::provider_server::Provider for Arc<Server> {
                             provider_meta_state.into(),
                         )
                         .await;
-                    Some((Default::default(), vec![], vec![]))
+                    Some((
+                        Default::default(),
+                        planned_private.unwrap_or_default(),
+                        vec![],
+                    ))
                 }
                 (true, false, false) => {
                     if let Some((state, private_state)) = resource
@@ -386,7 +390,12 @@ impl tf::provider_server::Provider for Arc<Server> {
                 }
                 (false, true, true) => {
                     resource
-                        .destroy(&mut diags, prior_state, provider_meta_state.into())
+                        .destroy(
+                            &mut diags,
+                            prior_state,
+                            request.planned_private,
+                            provider_meta_state.into(),
+                        )
                         .await;
                     Some((Default::default(), vec![]))
                 }
