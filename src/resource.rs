@@ -36,7 +36,11 @@ pub trait Resource: Send + Sync {
     /// Get the schema of the resource
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the resource
-    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()>;
+    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()> {
+        _ = diags;
+        _ = config;
+        Some(())
+    }
     /// Read the new state of the resource
     async fn read<'a>(
         &self,
@@ -127,7 +131,11 @@ pub trait DynamicResource: Send + Sync {
     /// Get the schema of the resource
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the resource
-    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()> {
+        _ = diags;
+        _ = config;
+        Some(())
+    }
     /// Read the new state of the resource
     async fn read(
         &self,

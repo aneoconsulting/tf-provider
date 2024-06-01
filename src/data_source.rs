@@ -33,7 +33,11 @@ pub trait DataSource: Send + Sync {
     /// Get the schema of the data source
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the data source
-    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()>;
+    async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()> {
+        _ = diags;
+        _ = config;
+        Some(())
+    }
     /// Read the new state of the data source
     async fn read<'a>(
         &self,
@@ -48,7 +52,11 @@ pub trait DynamicDataSource: Send + Sync {
     /// Get the schema of the data source
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
     /// Validate the configuration of the data source
-    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()>;
+    async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()> {
+        _ = diags;
+        _ = config;
+        Some(())
+    }
     /// Read the new state of the data source
     async fn read(
         &self,
