@@ -109,8 +109,9 @@ impl Resource for NullResource {
         Vec<tf_provider::AttributePath>,
     )> {
         let mut trigger_replace = Vec::new();
+
         if proposed_state.triggers != prior_state.triggers {
-            trigger_replace.push(AttributePath::new("root"));
+            trigger_replace.push(AttributePath::new("triggers"));
         }
 
         Some((proposed_state, prior_private_state, trigger_replace))

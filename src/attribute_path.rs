@@ -39,12 +39,18 @@ impl AttributePath {
     ///
     /// # Arguments
     ///
-    /// * `root` - Name of the root attribute
-    pub fn new<T: Into<Cow<'static, str>>>(root: T) -> Self {
+    /// * `name` - Name of the root attribute
+    pub fn new<T: Into<Cow<'static, str>>>(name: T) -> Self {
         Self {
-            steps: vec![AttributePathStep::Attribute(root.into())],
+            steps: vec![AttributePathStep::Attribute(name.into())],
         }
     }
+
+    /// Create a new attribute path without any path component
+    pub fn root() -> Self {
+        Self::default()
+    }
+
     /// Create a new attribute path for a function argument
     ///
     /// # Arguments
@@ -55,6 +61,7 @@ impl AttributePath {
             steps: vec![AttributePathStep::Index(index)],
         }
     }
+
     /// Create a new attribute path where the attribute `.name` has been appended
     ///
     /// # Arguments
@@ -64,6 +71,7 @@ impl AttributePath {
         self.add_attribute(name);
         self
     }
+
     /// Create a new attribute path where the access `["key"]` has been appended
     ///
     /// # Arguments
@@ -73,6 +81,7 @@ impl AttributePath {
         self.add_key(key);
         self
     }
+
     /// Create a new attribute path where the access `[idx]` has been appended
     ///
     /// # Arguments
@@ -92,6 +101,7 @@ impl AttributePath {
         self.steps.push(AttributePathStep::Attribute(name.into()));
         self
     }
+
     /// add key access to the path (ie: `["key"]`)
     ///
     /// # Arguments
@@ -101,6 +111,7 @@ impl AttributePath {
         self.steps.push(AttributePathStep::Key(key.into()));
         self
     }
+
     /// add index access to the path (ie: `[idx]`)
     ///
     /// # Arguments
@@ -110,6 +121,7 @@ impl AttributePath {
         self.steps.push(AttributePathStep::Index(idx.into()));
         self
     }
+
     /// Add step to the path
     ///
     /// # Arguments
@@ -119,6 +131,7 @@ impl AttributePath {
         self.steps.push(step);
         self
     }
+
     /// Add multiple steps into the path
     ///
     /// # Arguments
