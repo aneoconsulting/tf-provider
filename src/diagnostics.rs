@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`Diagnostics`] module
+
 use std::{
     backtrace::{Backtrace, BacktraceStatus},
     borrow::Cow,
@@ -32,14 +34,30 @@ pub struct Diagnostics {
 
 impl Diagnostics {
     /// Add an error diagnostic
+    ///
+    /// # Arguments
+    ///
+    /// * `diag` - diagnostic
     pub fn add_error(&mut self, diag: Diagnostic) {
         self.errors.push(diag)
     }
+
     /// Add a warning diagnostic
+    ///
+    /// # Arguments
+    ///
+    /// * `diag` - diagnostic
     pub fn add_warning(&mut self, diag: Diagnostic) {
         self.warnings.push(diag)
     }
+
     /// Add an error
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `detail` - Detail of the diagnostic component
+    /// * `attribute` - Attribute path for the diagnostic component
     pub fn error<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
         &mut self,
         summary: S,
@@ -48,7 +66,13 @@ impl Diagnostics {
     ) {
         self.add_error(Diagnostic::new(summary, detail, attribute))
     }
-    /// Add an error without AttributePath
+
+    /// Add an error without [`AttributePath`]
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `detail` - Detail of the diagnostic component
     pub fn root_error<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
         &mut self,
         summary: S,
@@ -56,7 +80,13 @@ impl Diagnostics {
     ) {
         self.add_error(Diagnostic::root(summary, detail))
     }
+
     /// Add an error without details
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `attribute` - Attribute path for the diagnostic component
     pub fn error_short<S: Into<Cow<'static, str>>>(
         &mut self,
         summary: S,
@@ -64,12 +94,23 @@ impl Diagnostics {
     ) {
         self.add_error(Diagnostic::short(summary, attribute))
     }
-    /// Add an error without AttributePath nor details
+
+    /// Add an error without [`AttributePath`] nor details
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
     pub fn root_error_short<S: Into<Cow<'static, str>>>(&mut self, summary: S) {
         self.add_error(Diagnostic::root_short(summary))
     }
 
     /// Add a warning
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `detail` - Detail of the diagnostic component
+    /// * `attribute` - Attribute path for the diagnostic component
     pub fn warning<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
         &mut self,
         summary: S,
@@ -78,7 +119,13 @@ impl Diagnostics {
     ) {
         self.add_warning(Diagnostic::new(summary, detail, attribute))
     }
-    /// Add a warning without AttributePath
+
+    /// Add a warning without [`AttributePath`]
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `detail` - Detail of the diagnostic component
     pub fn root_warning<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
         &mut self,
         summary: S,
@@ -86,7 +133,13 @@ impl Diagnostics {
     ) {
         self.add_warning(Diagnostic::root(summary, detail))
     }
+
     /// Add a warning without details
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `attribute` - Attribute path for the diagnostic component
     pub fn warning_short<S: Into<Cow<'static, str>>>(
         &mut self,
         summary: S,
@@ -94,35 +147,58 @@ impl Diagnostics {
     ) {
         self.add_warning(Diagnostic::short(summary, attribute))
     }
-    /// Add a warning without AttributePath nor details
+
+    /// Add a warning without [`AttributePath`] nor details
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
     pub fn root_warning_short<S: Into<Cow<'static, str>>>(&mut self, summary: S) {
         self.add_warning(Diagnostic::root_short(summary))
     }
-    /// Add
+
+    /// Append other diagnostics
     pub fn add_diagnostics(&mut self, mut diags: Diagnostics) {
         self.errors.append(&mut diags.errors);
         self.warnings.append(&mut diags.warnings);
     }
+
     /// Add an internal error if there is no existing errors
     pub fn internal_error(&mut self) {
         Option::<()>::None.collect_diagnostics(self);
     }
+
     /// Create an error for a function argument
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - index of the argument triggering the diagnostics
+    /// * `message` - Short message of the diagnostics
     pub fn function_error<S: Into<Cow<'static, str>>>(&mut self, index: i64, message: S) {
         self.add_error(Diagnostic::function(index, message))
     }
 }
 
+/// Diagnostic component
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Diagnostic {
+    /// Summary of the diagnostic component
     pub summary: Cow<'static, str>,
+    /// Detail of the diagnostic component
     pub detail: Cow<'static, str>,
+    /// Attribute path for the diagnostic component
     pub attribute: AttributePath,
 }
 
 /// Diagnostic
 impl Diagnostic {
     /// Create a diagnostic
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `detail` - Detail of the diagnostic component
+    /// * `attribute` - Attribute path for the diagnostic component
     pub fn new<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
         summary: S,
         detail: D,
@@ -143,7 +219,13 @@ impl Diagnostic {
             attribute,
         }
     }
+
     /// Create a diagnostic for a function argument
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - index of the argument triggering the diagnostics
+    /// * `message` - Short message of the diagnostics
     pub fn function<S: Into<Cow<'static, str>>>(index: i64, message: S) -> Self {
         Self::new(
             message,
@@ -151,18 +233,34 @@ impl Diagnostic {
             AttributePath::function_argument(index),
         )
     }
-    /// Create a diagnostic without AttributePath
+
+    /// Create a diagnostic without [`AttributePath`]
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `detail` - Detail of the diagnostic component
     pub fn root<S: Into<Cow<'static, str>>, D: Into<Cow<'static, str>>>(
         summary: S,
         detail: D,
     ) -> Self {
         Self::new(summary, detail, Default::default())
     }
+
     /// Create a diagnostic without details
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
+    /// * `attribute` - Attribute path for the diagnostic component
     pub fn short<S: Into<Cow<'static, str>>>(summary: S, attribute: AttributePath) -> Self {
         Self::new(summary, String::default(), attribute)
     }
-    /// Create a diagnostic AttributePath nor details
+    /// Create a diagnostic [`AttributePath`] nor details
+    ///
+    /// # Arguments
+    ///
+    /// * `summary` - Summary of the diagnostic component
     pub fn root_short<S: Into<Cow<'static, str>>>(summary: S) -> Self {
         Self::new(summary, String::default(), Default::default())
     }

@@ -18,10 +18,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 use serde::{Deserialize, Serialize};
-use tf_provider::schema::{FunctionSchema, Parameter, Type};
-use tf_provider::{
-    map, serve, Block, Description, Diagnostics, Function, Provider, Schema, ValueEmpty,
-};
+use tf_provider::schema::{Block, Description, FunctionSchema, Parameter, Schema, Type};
+use tf_provider::value::ValueEmpty;
+use tf_provider::{map, serve, Diagnostics, Function, Provider};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Add;
@@ -77,7 +76,7 @@ impl Provider for FnProvider {
     type Config<'a> = ValueEmpty;
     type MetaState<'a> = ValueEmpty;
 
-    fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<tf_provider::Schema> {
+    fn schema(&self, _diags: &mut tf_provider::Diagnostics) -> Option<tf_provider::schema::Schema> {
         Some(Schema {
             version: 1,
             block: Block {
@@ -90,8 +89,7 @@ impl Provider for FnProvider {
     fn get_functions(
         &self,
         _diags: &mut tf_provider::Diagnostics,
-    ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::function::DynamicFunction>>>
-    {
+    ) -> Option<std::collections::HashMap<String, Box<dyn tf_provider::DynamicFunction>>> {
         Some(map! {
             "add" => Add,
         })

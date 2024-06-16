@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`Provider`] module
+
 use std::collections::HashMap;
 
 use crate::data_source::DynamicDataSource;
@@ -26,18 +28,44 @@ use crate::schema::Schema;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-/// Trait for implementing a provider
+/// Trait for implementing a provider with automatic serialization/deserialization
+///
+/// See also: [`DynamicProvider`]
 #[async_trait]
 pub trait Provider: Send + Sync + 'static {
     /// Configuration of the provider
+    ///
+    /// The state will be automatically serialized/deserialized at the border of the request.
     type Config<'a>: Serialize + Deserialize<'a> + Send;
+
     /// State of the provider metadata
+    ///
+    /// The metadata state will be automatically serialized/deserialized at the border of the request.
     type MetaState<'a>: Serialize + Deserialize<'a> + Send;
 
     /// Get the schema of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
 
     /// Validate the configuration of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during validation
+    /// * `config` - State as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::Config<'a>) -> Option<()> {
         _ = diags;
         _ = config;
@@ -45,6 +73,17 @@ pub trait Provider: Send + Sync + 'static {
     }
 
     /// Configure the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during validation
+    /// * `terraform_version` - Version of the Terraform binary that calls the provider
+    /// * `config` - State as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn configure<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -58,6 +97,15 @@ pub trait Provider: Send + Sync + 'static {
     }
 
     /// Get the schema for the provider metadata (defaults to empty)
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn meta_schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
         _ = diags;
         Some(Schema {
@@ -67,6 +115,15 @@ pub trait Provider: Send + Sync + 'static {
     }
 
     /// Get the resources of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the resources
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn get_resources(
         &self,
         diags: &mut Diagnostics,
@@ -76,6 +133,15 @@ pub trait Provider: Send + Sync + 'static {
     }
 
     /// Get the data sources of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the data sources
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn get_data_sources(
         &self,
         diags: &mut Diagnostics,
@@ -85,6 +151,15 @@ pub trait Provider: Send + Sync + 'static {
     }
 
     /// Get the functions of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the functions
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn get_functions(
         &self,
         diags: &mut Diagnostics,
@@ -94,12 +169,34 @@ pub trait Provider: Send + Sync + 'static {
     }
 }
 
+/// Trait for implementing a provider *without* automatic serialization/deserialization
+///
+/// See also: [`Provider`]
 #[async_trait]
 pub trait DynamicProvider: Send + Sync + 'static {
     /// Get the schema of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
 
     /// Validate the configuration of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during validation
+    /// * `config` - State as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()> {
         _ = diags;
         _ = config;
@@ -107,6 +204,17 @@ pub trait DynamicProvider: Send + Sync + 'static {
     }
 
     /// Configure the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during validation
+    /// * `terraform_version` - Version of the Terraform binary that calls the provider
+    /// * `config` - State as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn configure(
         &self,
         diags: &mut Diagnostics,
@@ -120,6 +228,15 @@ pub trait DynamicProvider: Send + Sync + 'static {
     }
 
     /// Get the schema for the provider metadata (defaults to empty)
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn meta_schema(&self, diags: &mut Diagnostics) -> Option<Schema> {
         _ = diags;
         Some(Schema {
@@ -129,6 +246,15 @@ pub trait DynamicProvider: Send + Sync + 'static {
     }
 
     /// Get the resources of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the resources
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn get_resources(
         &self,
         diags: &mut Diagnostics,
@@ -138,6 +264,15 @@ pub trait DynamicProvider: Send + Sync + 'static {
     }
 
     /// Get the data sources of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the data sources
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn get_data_sources(
         &self,
         diags: &mut Diagnostics,
@@ -147,6 +282,15 @@ pub trait DynamicProvider: Send + Sync + 'static {
     }
 
     /// Get the functions of the provider
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the functions
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn get_functions(
         &self,
         diags: &mut Diagnostics,

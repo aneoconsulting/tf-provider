@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`DataSource`] module
+
 use crate::diagnostics::Diagnostics;
 use crate::raw::RawValue;
 use crate::schema::Schema;
@@ -23,22 +25,61 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 #[async_trait]
-/// Trait for implementing a data source
+/// Trait for implementing a data source with automatic serialization/deserialization
+///
+/// See also: [`DynamicDataSource`]
 pub trait DataSource: Send + Sync {
     /// State of the data source
+    ///
+    /// The state will be automatically serialized/deserialized at the border of the request.
     type State<'a>: Serialize + Deserialize<'a> + Send;
+
     /// State of the provider metadata
+    ///
+    /// The state will be automatically serialized/deserialized at the border of the request.
     type ProviderMetaState<'a>: Serialize + Deserialize<'a> + Send;
 
     /// Get the schema of the data source
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
+
     /// Validate the configuration of the data source
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during validation
+    /// * `config` - State as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn validate<'a>(&self, diags: &mut Diagnostics, config: Self::State<'a>) -> Option<()> {
         _ = diags;
         _ = config;
         Some(())
     }
-    /// Read the new state of the data source
+
+    /// Read the state of the data source
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the read
+    /// * `config` - State as declared in the Terraform file
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn read<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -48,16 +89,51 @@ pub trait DataSource: Send + Sync {
 }
 
 #[async_trait]
+/// Trait for implementing a data source *without* automatic serialization/deserialization
+///
+/// See also: [`DataSource`]
 pub trait DynamicDataSource: Send + Sync {
     /// Get the schema of the data source
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured when getting back the schema
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     fn schema(&self, diags: &mut Diagnostics) -> Option<Schema>;
+
     /// Validate the configuration of the data source
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during validation
+    /// * `config` - State as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn validate(&self, diags: &mut Diagnostics, config: RawValue) -> Option<()> {
         _ = diags;
         _ = config;
         Some(())
     }
+
     /// Read the new state of the data source
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - Diagnostics to record warnings and errors that occured during the read
+    /// * `config` - State as declared in the Terraform file
+    /// * `provider_meta_state` - State of the provider metadata as declared in the Terraform file
+    ///
+    /// # Remarks
+    ///
+    /// The return is ignored if there is an error in diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
     async fn read(
         &self,
         diags: &mut Diagnostics,

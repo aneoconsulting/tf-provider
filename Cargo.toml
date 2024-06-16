@@ -2,8 +2,9 @@
 authors = ["Florian Lemaitre <flemaitre@aneo.fr>"]
 description = "Plugin framework for Terraform and ToFu"
 edition = "2021"
-include = ["**/*.rs", "Cargo.toml", "LICENSE", "proto/*.proto"]
+include = ["**/*.rs", "Cargo.toml", "LICENSE", "README.md", "proto/*.proto"]
 license = "Apache-2.0"
+readme = "README.md"
 name = "tf-provider"
 repository = "https://github.com/aneoconsulting/tf-provider"
 version = "0.2.0-beta-0"

@@ -14,12 +14,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! [`RawValue`] module
+
 use crate::{diagnostics::Diagnostics, tfplugin6};
 use serde::{Deserialize, Serialize};
 
+/// Encode a dynamic value with either Message Pack or JSON encoding
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum RawValue {
+    /// Message Pack encoded value
     MessagePack(Vec<u8>),
+    /// JSON encoded value
     Json(Vec<u8>),
 }
 
@@ -27,12 +32,23 @@ const NULL_MESSAGE_PACK: [u8; 1] = [0xc0_u8];
 const NULL_JSON: &str = "null";
 
 impl RawValue {
+    /// Check if the encoded value is null
     pub fn is_null(&self) -> bool {
         match self {
             RawValue::MessagePack(mp) => mp.is_empty() || mp.as_slice() == NULL_MESSAGE_PACK,
             RawValue::Json(json) => json.is_empty() || json.as_slice() == NULL_JSON.as_bytes(),
         }
     }
+
+    /// Deserialize a [`RawValue`] into a concrete type
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - diagnostics where deserialization errors and warnings are reported
+    ///
+    /// # Remarks
+    ///
+    /// Returns [`None`] iff there is an error reported in diagnostics
     pub fn deserialize<'a, T>(&'a self, diags: &mut Diagnostics) -> Option<T>
     where
         T: Deserialize<'a>,
@@ -69,6 +85,16 @@ impl RawValue {
         }
     }
 
+    /// Serialize `value` into a Message Pack encoded [`Vec<u8>`]
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - diagnostics where serialization errors and warnings are reported
+    /// * `value` - object to encode
+    ///
+    /// # Remarks
+    ///
+    /// Returns [`None`] iff there is an error reported in diagnostics
     pub fn serialize_vec<T>(diags: &mut Diagnostics, value: &T) -> Option<Vec<u8>>
     where
         T: Serialize,
@@ -81,6 +107,17 @@ impl RawValue {
             }
         }
     }
+
+    /// Serialize `value` into a [`RawValue`]
+    ///
+    /// # Arguments
+    ///
+    /// * `diags` - diagnostics where serialization errors and warnings are reported
+    /// * `value` - object to encode
+    ///
+    /// # Remarks
+    ///
+    /// Returns [`None`] iff there is an error reported in diagnostics
     pub fn serialize<T>(diags: &mut Diagnostics, value: &T) -> Option<RawValue>
     where
         T: Serialize,
