@@ -174,8 +174,8 @@ pub trait Resource: Send + Sync {
     ///
     /// # Remarks
     ///
-    /// The return is ignored if there is an error in diagnostics.
     /// If the return is [`None`], an ad-hoc error is added to diagnostics.
+    /// Return must be [`Some`] if the resource was created, even if there was errors while creating the resource.
     async fn create<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -198,8 +198,8 @@ pub trait Resource: Send + Sync {
     ///
     /// # Remarks
     ///
-    /// The return is ignored if there is an error in diagnostics.
-    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics, and the resource state is kept unchanged.
+    /// Return must be [`Some`] if the resource was updated, even if there was errors while updated the resource.
     async fn update<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -240,8 +240,8 @@ pub trait Resource: Send + Sync {
     ///
     /// # Remarks
     ///
-    /// The return is ignored if there is an error in diagnostics.
     /// If the return is [`None`], an ad-hoc error is added to diagnostics.
+    /// Return must be [`Some`] if the resource was imported, even if there was errors while importing the resource.
     async fn import<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -262,8 +262,11 @@ pub trait Resource: Send + Sync {
     ///
     /// # Remarks
     ///
-    /// The return is ignored if there is an error in diagnostics.
-    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics, and the resource state is kept unchanged.
+    /// Return must be [`Some`] if the resource was upgraded, even if there was errors while upgraded the resource.
+    ///
+    /// Because the schema of the resource might have changed,
+    /// the prior state must be deserialized explicitely.
     async fn upgrade<'a>(
         &self,
         diags: &mut Diagnostics,
@@ -411,8 +414,8 @@ pub trait DynamicResource: Send + Sync {
     ///
     /// # Remarks
     ///
-    /// The return is ignored if there is an error in diagnostics.
     /// If the return is [`None`], an ad-hoc error is added to diagnostics.
+    /// Return must be [`Some`] if the resource was created, even if there was errors while creating the resource.
     async fn create(
         &self,
         diags: &mut Diagnostics,
@@ -435,8 +438,8 @@ pub trait DynamicResource: Send + Sync {
     ///
     /// # Remarks
     ///
-    /// The return is ignored if there is an error in diagnostics.
-    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics, and the resource state is kept unchanged.
+    /// Return must be [`Some`] if the resource was updated, even if there was errors while updated the resource.
     async fn update(
         &self,
         diags: &mut Diagnostics,
@@ -477,8 +480,8 @@ pub trait DynamicResource: Send + Sync {
     ///
     /// # Remarks
     ///
-    /// The return is ignored if there is an error in diagnostics.
     /// If the return is [`None`], an ad-hoc error is added to diagnostics.
+    /// Return must be [`Some`] if the resource was imported, even if there was errors while importing the resource.
     async fn import(&self, diags: &mut Diagnostics, id: String) -> Option<(RawValue, Vec<u8>)> {
         _ = id;
         diags.root_error_short("Import is not supported");
@@ -495,8 +498,8 @@ pub trait DynamicResource: Send + Sync {
     ///
     /// # Remarks
     ///
-    /// The return is ignored if there is an error in diagnostics.
-    /// If the return is [`None`], an ad-hoc error is added to diagnostics.
+    /// If the return is [`None`], an ad-hoc error is added to diagnostics, and the resource state is kept unchanged.
+    /// Return must be [`Some`] if the resource was upgraded, even if there was errors while upgraded the resource.
     async fn upgrade(
         &self,
         diags: &mut Diagnostics,
