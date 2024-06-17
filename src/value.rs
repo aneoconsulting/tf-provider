@@ -252,8 +252,8 @@ impl<T> Value<T> {
     /// or call [`unwrap_or`], [`unwrap_or_else`], or [`unwrap_or_default`].
     ///
     /// [`unwrap_or`]: Value::unwrap_or
-    /// [`unwrap_else`]: Value::unwrap_else
-    /// [`unwrap_default`]: Value::unwrap_default
+    /// [`unwrap_or_else`]: Value::unwrap_or_else
+    /// [`unwrap_or_default`]: Value::unwrap_or_default
     ///
     /// # Panics
     ///
