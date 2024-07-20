@@ -21,7 +21,7 @@ async-trait = "0.1"
 base64 = "0.22"
 futures = "0.3"
 pem = "3.0"
-prost = "0.12"
+prost = "0.13"
 rcgen = "0.12"
 rmp-serde = "1.1"
 serde = { version = "1.0", features = ["derive"] }
@@ -31,13 +31,13 @@ time = "0.3"
 tokio = "1.0"
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-util = "0.7"
-tonic = { version = "0.11", features = ["tls", "transport"] }
-tower-http = { version = "0.4", features = ["trace"] }
+tonic = { version = "0.12", features = ["tls", "transport"] }
+tower-http = { version = "0.5", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["fmt", "json", "std"] }
 
 [build-dependencies]
-tonic-build = "0.11"
+tonic-build = "0.12"
 
 [dev-dependencies]
 rand = "0.8"
