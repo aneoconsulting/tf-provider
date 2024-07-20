@@ -313,16 +313,12 @@ impl TlsConfig {
         let client_cert = tonic::transport::Certificate::from_pem(env_cert);
 
         // Parameters to generate the server certificate
-        let mut cp = rcgen::CertificateParams::new(vec!["localhost".to_string()]);
-        cp.alg = &rcgen::PKCS_ECDSA_P384_SHA384;
+        let mut cp = rcgen::CertificateParams::new(["localhost".to_string()])?;
         cp.not_before = time::OffsetDateTime::now_utc().saturating_sub(30.seconds());
         cp.not_after = time::OffsetDateTime::now_utc().saturating_add((30 * 365).days());
         let mut dn = rcgen::DistinguishedName::new();
         dn.push(rcgen::DnType::OrganizationName, "Hashicorp");
-        dn.push(
-            rcgen::DnType::CommonName,
-            rcgen::DnValue::PrintableString("localhost".to_string()),
-        );
+        dn.push(rcgen::DnType::CommonName, "localhost");
         cp.distinguished_name = dn;
         cp.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         cp.key_usages = vec![
@@ -338,22 +334,20 @@ impl TlsConfig {
         cp.key_identifier_method = rcgen::KeyIdMethod::Sha512;
 
         // Generate the server certificate and its keys
-        let server_cert = rcgen::Certificate::from_params(cp)?;
-        let server_cert_der = server_cert.serialize_der_with_signer(&server_cert)?;
-
-        let p = pem::Pem::new("CERTIFICATE".to_string(), server_cert_der.clone());
-        let server_cert_pem = pem::encode(&p);
-
-        let server_cert_key_pem = server_cert.serialize_private_key_pem();
+        let keypair = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P384_SHA384)?;
+        let server_cert = cp.self_signed(&keypair)?;
 
         let tls_config = ServerTlsConfig::new()
             .client_ca_root(client_cert)
             .client_auth_optional(true)
-            .identity(Identity::from_pem(server_cert_pem, server_cert_key_pem));
+            .identity(Identity::from_pem(
+                server_cert.pem(),
+                keypair.serialize_pem(),
+            ));
 
         Ok(Self {
             server: Some(tls_config),
-            cert: server_cert_der,
+            cert: server_cert.der().to_vec(),
         })
     }
 
