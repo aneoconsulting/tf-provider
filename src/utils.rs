@@ -35,6 +35,7 @@ pub(crate) mod serde_unknown {
         ExtStruct((0, serde_bytes::ByteBuf::from(vec![]))).serialize(serializer)
     }
 
+    #[allow(dead_code)]
     pub fn deserialize<'de, D>(deserializer: D) -> Result<(), D::Error>
     where
         D: serde::Deserializer<'de>,

@@ -21,13 +21,15 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::{Debug, Display},
     iter::FusedIterator,
+    marker::PhantomData,
     mem,
     ops::{Deref, DerefMut},
+    str::from_utf8,
 };
 
-use serde::{Deserialize, Serialize};
+use serde::{de::Visitor, Deserialize, Serialize};
 
-use crate::utils::serde_unknown;
+use crate::utils::{serde_unknown, ExtStruct};
 
 /// Encode either a known value, a null value, or an unknown value as specified by the Terraform protocol.
 ///
@@ -37,7 +39,7 @@ use crate::utils::serde_unknown;
 /// - [`Value::Unknown`] has no option counterpart and represent a value that is currently unknown, but will be known later on.
 ///
 /// [`Value::Unknown`] is *not* a [`Future`](std::future::Future), but merely a tag.
-#[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Default, Serialize)]
 #[serde(untagged)]
 pub enum Value<T> {
     /// Value is present
@@ -50,7 +52,110 @@ pub enum Value<T> {
     Unknown,
 }
 
-#[derive(Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+macro_rules! forward_visit {
+    ([ -> ]) => {
+        serde::de::IntoDeserializer::into_deserializer
+    };
+    ([ -> $de:ident]) => {
+        serde::de::value::$de::new
+    };
+    ($($visit:ident($value:ty)$(-> $de:ident)?),*$(,)?) => {
+        $(
+            fn $visit<E>(self, v: $value) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                T::deserialize(forward_visit!([-> $($de)?])(v)).map(Value::Value)
+            }
+        )*
+    };
+}
+
+macro_rules! forward_visit_trait {
+    ([ ($v:ident) ]) => {
+        $v
+    };
+    ([ $de:ident($v:ident)]) => {
+        serde::de::value::$de::new($v)
+    };
+    ($($visit:ident($($trait:tt)*)$(-> $de:ident)?),*$(,)?) => {
+        $(
+            fn $visit<E>(self, v: E) -> Result<Self::Value, E::Error>
+            where
+                E: $($trait)*,
+            {
+                T::deserialize(forward_visit_trait!([$($de)?(v)])).map(Value::Value)
+            }
+        )*
+    };
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Value<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ValueVisitor<T>(PhantomData<T>);
+        impl<'de, T: Deserialize<'de>> Visitor<'de> for ValueVisitor<T> {
+            type Value = Value<T>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "any value")
+            }
+
+            forward_visit!(
+                visit_bool(bool),
+                visit_borrowed_bytes(&'de [u8]) -> BorrowedBytesDeserializer,
+                visit_borrowed_str(&'de str) -> BorrowedStrDeserializer,
+                visit_byte_buf(Vec<u8>),
+                visit_bytes(&[u8]),
+                visit_char(char),
+                visit_f32(f32),
+                visit_f64(f64),
+                visit_i8(i8),
+                visit_i16(i16),
+                visit_i32(i32),
+                visit_i64(i64),
+                visit_i128(i128),
+                visit_u8(u8),
+                visit_u16(u16),
+                visit_u32(u32),
+                visit_u64(u64),
+                visit_u128(u128),
+                visit_str(&str),
+                visit_string(String),
+            );
+            forward_visit_trait!(
+                visit_enum(serde::de::EnumAccess<'de>) -> EnumAccessDeserializer,
+                visit_map(serde::de::MapAccess<'de>) -> MapAccessDeserializer,
+                visit_seq(serde::de::SeqAccess<'de>) -> SeqAccessDeserializer,
+                visit_some(serde::Deserializer<'de>),
+            );
+
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                ExtStruct::deserialize(deserializer).and(Ok(Value::Unknown))
+            }
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Value::Null)
+            }
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(Value::Null)
+            }
+        }
+        deserializer.deserialize_any(ValueVisitor(PhantomData))
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Default, Serialize)]
 #[serde(untagged)]
 pub enum ValueAny {
     String(String),
@@ -62,6 +167,185 @@ pub enum ValueAny {
     Null,
     #[serde(with = "serde_unknown")]
     Unknown,
+}
+
+impl<'de> Deserialize<'de> for ValueAny {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct ValueAnyVisitor;
+
+        impl<'de> Visitor<'de> for ValueAnyVisitor {
+            type Value = ValueAny;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "any value")
+            }
+            fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Bool(v))
+            }
+            fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::String(
+                    from_utf8(v).map_err(serde::de::Error::custom)?.to_owned(),
+                ))
+            }
+            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::String(v.to_owned()))
+            }
+            fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::String(
+                    String::from_utf8(v).map_err(serde::de::Error::custom)?,
+                ))
+            }
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::String(
+                    from_utf8(v).map_err(serde::de::Error::custom)?.to_owned(),
+                ))
+            }
+            fn visit_char<E>(self, v: char) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::String(v.to_string()))
+            }
+            fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Number(v.into()))
+            }
+            fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Number(v.into()))
+            }
+            fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Number(v.into()))
+            }
+            fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Number(v))
+            }
+            fn visit_i128<E>(self, v: i128) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                v.try_into()
+                    .map_err(serde::de::Error::custom)
+                    .map(ValueAny::Number)
+            }
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                BTreeMap::<String, ValueAny>::deserialize(
+                    serde::de::value::MapAccessDeserializer::new(map),
+                )
+                .map(ValueAny::Map)
+            }
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                ExtStruct::deserialize(deserializer).and(Ok(ValueAny::Unknown))
+            }
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Null)
+            }
+            fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                Vec::<ValueAny>::deserialize(serde::de::value::SeqAccessDeserializer::new(seq))
+                    .map(ValueAny::List)
+            }
+            fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                ValueAny::deserialize(deserializer)
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::String(v.to_owned()))
+            }
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::String(v))
+            }
+            fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Number(v.into()))
+            }
+            fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Number(v.into()))
+            }
+            fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Number(v.into()))
+            }
+            fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                v.try_into()
+                    .map_err(serde::de::Error::custom)
+                    .map(ValueAny::Number)
+            }
+            fn visit_u128<E>(self, v: u128) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                v.try_into()
+                    .map_err(serde::de::Error::custom)
+                    .map(ValueAny::Number)
+            }
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(ValueAny::Null)
+            }
+        }
+
+        deserializer.deserialize_any(ValueAnyVisitor)
+    }
 }
 
 impl ValueAny {
