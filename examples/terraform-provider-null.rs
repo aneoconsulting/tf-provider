@@ -18,8 +18,8 @@ use std::borrow::Cow;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::distr::Alphanumeric;
+use rand::{rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use tf_provider::schema::{
@@ -135,7 +135,7 @@ impl Resource for NullResource {
         private_state: Self::PrivateState<'a>,
         _provider_meta_state: Self::ProviderMetaState<'a>,
     ) -> Option<(Self::State<'a>, Self::PrivateState<'a>)> {
-        let id = thread_rng()
+        let id = rng()
             .sample_iter(&Alphanumeric)
             .take(30)
             .map(char::from)

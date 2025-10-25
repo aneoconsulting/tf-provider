@@ -277,7 +277,7 @@ impl Serialize for AttributeType {
         S: serde::Serializer,
     {
         struct AttributesAsType<'a>(&'a HashMap<String, Attribute>);
-        impl<'a> Serialize for AttributesAsType<'a> {
+        impl Serialize for AttributesAsType<'_> {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
                 S: serde::Serializer,
@@ -317,11 +317,11 @@ impl Serialize for AttributeType {
 
 impl Display for AttributeType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return f.write_str(
+        f.write_str(
             serde_json::to_string(self)
                 .or(Err(std::fmt::Error))?
                 .as_str(),
-        );
+        )
     }
 }
 
@@ -428,11 +428,11 @@ impl Serialize for Type {
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        return f.write_str(
+        f.write_str(
             serde_json::to_string(self)
                 .or(Err(std::fmt::Error))?
                 .as_str(),
-        );
+        )
     }
 }
 
