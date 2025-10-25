@@ -1427,7 +1427,7 @@ impl From<String> for Value<Cow<'_, str>> {
     }
 }
 
-impl<'a> Deref for Value<Cow<'a, str>> {
+impl Deref for Value<Cow<'_, str>> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {

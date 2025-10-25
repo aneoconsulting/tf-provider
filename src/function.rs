@@ -189,7 +189,7 @@ macro_rules! deserialize {
     };
 }
 
-impl<'de, 'a> de::Deserializer<'de> for &'a mut Decoder<'de> {
+impl<'de> de::Deserializer<'de> for &mut Decoder<'de> {
     type Error = DecoderError;
 
     deserialize!(deserialize_bool);

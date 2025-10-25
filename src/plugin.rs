@@ -140,13 +140,13 @@ impl GrpcIo {
         let (tx, _) = broadcast::channel(capacity);
         Self { tx }
     }
-    pub fn stdout(&self) -> GrpcIoStream {
+    pub fn stdout(&self) -> GrpcIoStream<'_> {
         GrpcIoStream {
             tx: &self.tx,
             channel: 1,
         }
     }
-    pub fn stderr(&self) -> GrpcIoStream {
+    pub fn stderr(&self) -> GrpcIoStream<'_> {
         GrpcIoStream {
             tx: &self.tx,
             channel: 2,
