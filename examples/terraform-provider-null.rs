@@ -19,7 +19,7 @@ use std::borrow::Cow;
 use anyhow::Result;
 use async_trait::async_trait;
 use rand::distr::Alphanumeric;
-use rand::{rng, Rng};
+use rand::{rng, RngExt};
 use serde::{Deserialize, Serialize};
 
 use tf_provider::schema::{
